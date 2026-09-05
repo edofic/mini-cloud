@@ -27,6 +27,7 @@ Select exactly one runtime:
 ```json
 {
   "access": "authenticated",
+  "sandbox": "bubblewrap",
   "process": {
     "command": ["./server", "--port", "${PORT}"],
     "working_directory": ".",
@@ -72,6 +73,7 @@ Select exactly one runtime:
 - `description`: Short text shown on the app tile.
 - `icon`: App-relative image path used by the tile. Mini-cloud reads it directly without waking a process app; keep the path inside the app directory.
 - `access`: `public` or `authenticated`; defaults to authenticated.
+- `sandbox`: Optional `bubblewrap`; applies a lightweight namespace and read-only-host-filesystem preset to process, CGI, and cron commands. The app directory remains writable and networking remains shared.
 - `idle`: Process idle timeout; `"0s"` disables idle shutdown.
 - `watch.ignore`: Relative file or directory patterns that should not trigger restarts. Exclude databases, caches, generated files, and other mutable state.
 - `cron`: Scheduled commands using five-field cron expressions. Each entry has `name`, `schedule`, `command`, optional `timeout`, `overlap` (`forbid`, `allow`, or `replace`), and `missed` (`skip`). Cron commands do not keep the HTTP process awake.

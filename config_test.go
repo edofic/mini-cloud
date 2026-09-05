@@ -48,6 +48,7 @@ func TestRejectInvalidManifestSettings(t *testing.T) {
 		`{"process":{"command":["true"],"restart":{"maximum_attempts":-1}}}`,
 		`{"process":{"command":["true"],"startup_timeout":"-1s"}}`,
 		`{"static":{"root":"."},"idle":"-1s"}`,
+		`{"static":{"root":"."},"sandbox":"docker"}`,
 		`{"static":{"root":"."},"cron":[{"name":"same","schedule":"* * * * *","command":["true"]},{"name":"same","schedule":"* * * * *","command":["true"]}]}`,
 	} {
 		dir := t.TempDir()

@@ -26,7 +26,7 @@ journalctl -u mini-cloud.service -f
 
 Entries include fields such as `app=hello`, `job=cleanup`, `stream=stderr`, and `event=ready`. The gateway does not store or query historical logs.
 
-The configured admin host shows runtime type, access, state, port, active requests, restart count, cron results, process errors, and manifest errors. `/api/apps` returns the same snapshot as JSON. The page is intentionally observational: it has no deploy or remote process-control actions.
+The configured admin host shows runtime type, access, sandbox mode, state, port, active requests, restart count, cron results, process errors, and manifest errors. `/api/apps` returns the same snapshot as JSON. The page is intentionally observational: it has no deploy or remote process-control actions.
 
 ## Shutdown
 
@@ -45,6 +45,7 @@ Edit files directly, use Git in the directory, or point a command through your o
 | 403 | Check exact user/group allow lists or `admin_identity`. |
 | 502 during authentication | Check verifier reachability and that `copy_headers` includes the configured identity header. |
 | 503 starting a process | Inspect the admin error and logs for command, environment-file, port, or readiness failures. |
+| Sandboxed command fails to start | Ensure `bwrap` is on the gateway `PATH` and the host permits unprivileged user namespaces. |
 | Process repeatedly restarts after writing data | Add output directories to `watch.ignore`. |
 | File edit does not restart a process | Check polling delay, ignored paths, symlink targets, and active requests delaying drain. |
 | Startup fails while generating guidance | Make `apps_dir` writable by the gateway user. |

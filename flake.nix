@@ -32,7 +32,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in {
       default = pkgs.mkShell {
-        packages = [pkgs.go_1_27 pkgs.golangci-lint pkgs.python3 pkgs.curl pkgs.bash pkgs.gcc];
+        packages = [pkgs.go_1_27 pkgs.golangci-lint pkgs.python3 pkgs.curl pkgs.bash pkgs.bubblewrap pkgs.gcc];
       };
     });
 

@@ -11,7 +11,7 @@ modules = [
     services.mini-cloud = {
       enable = true;
       appsDir = "/var/lib/mini-cloud/apps";
-      runtimePackages = [ pkgs.bash pkgs.coreutils pkgs.python3 ];
+      runtimePackages = [ pkgs.bash pkgs.bubblewrap pkgs.coreutils pkgs.python3 ];
       settings = {
         base_domain = "apps.example.test";
         index_host = "apps.example.test";
@@ -26,7 +26,7 @@ modules = [
 ];
 ```
 
-The module creates one `mini-cloud` system user/group by default, creates the mutable home and apps directories, installs the gateway as one systemd service, puts configured runtime packages on `PATH`, and uses `KillMode=control-group`. Override `user`, `group`, `home`, `runtimePackages`, `environment`, `package`, and `settings` when integrating with an existing host.
+The module creates one `mini-cloud` system user/group by default, creates the mutable home and apps directories, installs the gateway as one systemd service, puts configured runtime packages on `PATH`, and uses `KillMode=control-group`. Bubblewrap is included so manifests can opt into the [lightweight sandbox](security.md#optional-bubblewrap-sandbox). Override `user`, `group`, `home`, `runtimePackages`, `environment`, `package`, and `settings` when integrating with an existing host.
 
 `settings` becomes a JSON file in the Nix store. Do not put passwords, tokens, or other secrets there; use an environment file in the protected apps directory or a separate secret mechanism. Caddy, Authelia, DNS, TLS, and host-specific virtual hosts remain outside this module.
 
@@ -34,7 +34,7 @@ Build the package with `nix build .#mini-cloud`. The default development shell i
 
 The example assumes an authorization service at the configured URL and a trusted edge proxy; the module does not create either. See [gateway authentication](gateway-configuration.md#authentication). Without a verifier or an identity supplied by that proxy, protected apps, the index, and admin return 401.
 
-`appsDir` overrides any `settings.apps_dir`. The service working directory and `HOME` default to `/var/lib/mini-cloud`; relative configuration paths resolve there. The default runtime packages are Bash, coreutils, and Python 3. Setting `runtimePackages` replaces that list. If you select a different user or group, declare that account yourself.
+`appsDir` overrides any `settings.apps_dir`. The service working directory and `HOME` default to `/var/lib/mini-cloud`; relative configuration paths resolve there. The default runtime packages are Bash, bubblewrap, coreutils, and Python 3. Setting `runtimePackages` replaces that list; retain `pkgs.bubblewrap` when any app sets `"sandbox": "bubblewrap"`. If you select a different user or group, declare that account yourself.
 
 Application secrets can be loaded with manifest `environment_files`. Values placed in the module's `environment` option also become part of the Nix configuration; keep secrets out of that option as well. For service-wide secrets, use a separately managed systemd `EnvironmentFile`.
 

@@ -13,7 +13,7 @@ in {
     home = mkOption {type = types.str; default = "/var/lib/mini-cloud"; description = "HOME and working directory for the service.";};
     runtimePackages = mkOption {
       type = types.listOf types.package;
-      default = [pkgs.bash pkgs.coreutils pkgs.python3];
+      default = [pkgs.bash pkgs.bubblewrap pkgs.coreutils pkgs.python3];
       description = "Programs placed on PATH for applications and scheduled commands.";
     };
     environment = mkOption {type = types.attrsOf types.str; default = {}; description = "Additional environment variables shared by the gateway and apps.";};

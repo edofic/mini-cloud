@@ -69,12 +69,38 @@ func (g *Gateway) requestContext(parent context.Context) (context.Context, conte
 	stop := context.AfterFunc(g.ctx, cancel)
 	return ctx, func() { stop(); cancel() }
 }
-func appCommand(appDir, work string, args []string) *exec.Cmd {
+func appCommand(appDir, work string, args []string, sandbox string) *exec.Cmd {
+	workDir := resolveWithin(appDir, work)
 	path := args[0]
 	if strings.ContainsRune(path, filepath.Separator) && !filepath.IsAbs(path) {
-		path = filepath.Join(resolveWithin(appDir, work), path)
+		path = filepath.Join(workDir, path)
+	}
+	if sandbox == "bubblewrap" {
+		// The host filesystem supplies runtimes and libraries read-only, while the
+		// authoritative app directory remains live and writable. Network sharing
+		// is required so process apps can bind their gateway-assigned loopback port.
+		bwrapArgs := []string{
+			"--die-with-parent",
+			"--unshare-user",
+			"--unshare-pid",
+			"--unshare-ipc",
+			"--unshare-uts",
+			"--unshare-cgroup-try",
+			"--share-net",
+			"--ro-bind", "/", "/",
+			"--dev", "/dev",
+			"--proc", "/proc",
+			"--tmpfs", "/tmp",
+			"--bind", appDir, appDir,
+			"--chdir", workDir,
+			"--",
+			path,
+		}
+		cmd := exec.Command("bwrap", append(bwrapArgs, args[1:]...)...)
+		cmd.Dir = workDir
+		return cmd
 	}
 	cmd := exec.Command(path, args[1:]...)
-	cmd.Dir = resolveWithin(appDir, work)
+	cmd.Dir = workDir
 	return cmd
 }

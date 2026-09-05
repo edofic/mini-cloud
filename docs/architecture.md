@@ -10,6 +10,8 @@ clients -> Caddy -> mini-cloud -> static files
 
 Each immediate child of `apps_dir` is identified by its directory name. A child is an app only when it contains `mini-cloud.json`. Files remain in place and mutable; the gateway never copies, builds, versions, releases, or rolls them back.
 
+Command-based apps may opt into a fixed bubblewrap namespace preset. The gateway still directly creates and supervises those children; it does not create images, copy application files, or add a release lifecycle. The app directory is bind-mounted writable and the host supplies read-only runtimes and libraries.
+
 The last successfully parsed manifest remains active. An invalid edit is logged and displayed on the admin page without breaking the running configuration.
 
 ## Runtime types
@@ -42,4 +44,4 @@ Production integration should supervise the gateway as one system service with a
 
 ## Non-goals
 
-The gateway does not provide builds, deployments, releases, rollback, migrations, backups, containers, DNS, TLS, distributed scheduling, resource quotas, or log storage.
+The gateway does not provide builds, deployments, releases, rollback, migrations, backups, full containers or images, DNS, TLS, distributed scheduling, resource quotas, or log storage. The optional bubblewrap preset is deliberately only lightweight process and write isolation.

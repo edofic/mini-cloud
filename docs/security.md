@@ -10,4 +10,12 @@ Environment files support `KEY=VALUE`, comments beginning with `#`, and optional
 
 Static paths and symlinks remain confined to the static root. Use a dedicated public-assets directory: files such as `.env` and `mini-cloud.json` are not automatically hidden if placed under that root. Public app requests skip gateway verification; applications must not treat an incoming identity header as proof that the gateway authenticated that request. Process and CGI commands are trusted manifest content and may intentionally address other paths. Ignore writable databases, caches, sockets, and generated files to avoid restart loops.
 
-Children use separate Unix process groups, but there are no per-app cgroups, namespaces, syscall filters, resource limits, or filesystem sandboxes. Use another Unix user or execution layer for untrusted code.
+Children use separate Unix process groups. By default, they otherwise have the same operating-system access as the gateway user.
+
+## Optional bubblewrap sandbox
+
+An app manifest can set `"sandbox": "bubblewrap"`. All of that app's process, CGI, and cron commands then run with private user, PID, IPC, UTS, and mount namespaces; a private cgroup namespace where supported; private `/tmp`, `/proc`, and `/dev`; a read-only view of the host filesystem; and a writable bind mount of the authoritative app directory. Networking remains shared so an HTTP process can bind its assigned host-loopback port. Static responses are served by the gateway itself and do not enter a sandbox.
+
+This “containers lite” preset reduces accidental or compromised writes outside the app directory and limits process visibility. It does not hide host files from the app, isolate the network, filter system calls, limit CPU or memory, create a separate service identity, or prevent apps from affecting each other through shared resources. App-directory symlinks into the host remain subject to the target's read-only mount. Continue to treat every manifest author as trusted; use separate Unix users, cgroups, firewall policy, or a full container/VM boundary for untrusted or mutually distrusting workloads.
+
+The gateway invokes `bwrap` from its `PATH`. If it is missing or the kernel/service policy prohibits unprivileged user namespaces, sandboxed commands fail to start while unsandboxed apps continue to work. Keep bubblewrap patched through the host package manager. The NixOS module and project container image include it by default.

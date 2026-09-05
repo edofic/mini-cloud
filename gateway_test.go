@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,6 +102,42 @@ func TestProcessStartsRestartsAfterEditAndIdles(t *testing.T) {
 			t.Fatalf("app did not idle; state=%s", state)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	g.stopAll()
+}
+
+func TestBubblewrapProcessStartsOnSharedLoopback(t *testing.T) {
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		t.Skip("bubblewrap is not installed")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, "sandboxed")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binaryBody, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "helper"), binaryBody, 0755); err != nil {
+		t.Fatal(err)
+	}
+	m := helperManifest("sandboxed")
+	m.Sandbox = "bubblewrap"
+	m.Process.Command[0] = "./helper"
+	writeJSON(t, filepath.Join(dir, manifestName), m)
+	g := NewGateway(testConfig(root))
+	g.ctx = t.Context()
+	if err := g.scan(); err != nil {
+		t.Fatal(err)
+	}
+	code, body := request(g, "sandboxed.test", "/")
+	if code != http.StatusOK || body != "sandboxed" {
+		t.Fatalf("sandboxed request: %d %q", code, body)
 	}
 	g.stopAll()
 }

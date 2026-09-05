@@ -105,6 +105,7 @@ type Manifest struct {
 	Access       string         `json:"access"`
 	AccessUsers  []string       `json:"access_users,omitempty"`
 	AccessGroups []string       `json:"access_groups,omitempty"`
+	Sandbox      string         `json:"sandbox,omitempty"`
 	Process      *ProcessConfig `json:"process,omitempty"`
 	Static       *StaticConfig  `json:"static,omitempty"`
 	CGI          *CGIConfig     `json:"cgi,omitempty"`
@@ -194,6 +195,9 @@ func loadManifest(dir string) (Manifest, error) {
 	}
 	if m.Access == "public" && (len(m.AccessUsers) != 0 || len(m.AccessGroups) != 0) {
 		return m, fmt.Errorf("access_users and access_groups require authenticated access")
+	}
+	if m.Sandbox != "" && m.Sandbox != "bubblewrap" {
+		return m, fmt.Errorf("sandbox must be bubblewrap or omitted")
 	}
 	if m.AccessUsers, err = normalizePrincipals("access_users", m.AccessUsers); err != nil {
 		return m, err

@@ -51,4 +51,4 @@ The gateway writes generated agent guidance below `/apps` at startup and observe
 
 For production, configure [authentication](gateway-configuration.md#authentication) and a TLS reverse proxy. A verifier address of `127.0.0.1` refers to the container itself; use an address reachable from the gateway container when the verifier runs elsewhere.
 
-The container packages native child processes in one trust domain. It does not provide per-app isolation, resource limits, or a deployment workflow. See the [security model](security.md).
+The image includes bubblewrap for apps that opt into `"sandbox": "bubblewrap"`. Nested user namespaces must be permitted by the container runtime and host; if they are blocked, sandboxed commands fail to start. The preset provides limited per-app process and write isolation, not resource or confidentiality isolation, and the container remains one trust domain. See the [security model](security.md#optional-bubblewrap-sandbox).

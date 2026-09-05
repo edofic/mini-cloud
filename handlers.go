@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -137,7 +136,7 @@ func within(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig) {
+func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig, sandbox string) {
 	a.mu.Lock()
 	sem := a.cgiSem
 	a.mu.Unlock()
@@ -158,12 +157,7 @@ func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig) {
 		return
 	}
 	args := interpolate(c.Command, env)
-	path := args[0]
-	if strings.Contains(path, string(filepath.Separator)) && !filepath.IsAbs(path) {
-		path = filepath.Join(resolveWithin(a.dir, c.WorkingDirectory), path)
-	}
-	cmd := exec.Command(path, args[1:]...)
-	cmd.Dir = resolveWithin(a.dir, c.WorkingDirectory)
+	cmd := appCommand(a.dir, c.WorkingDirectory, args, sandbox)
 	cmd.Stdin = r.Body
 	env["GATEWAY_INTERFACE"] = "CGI/1.1"
 	env["SERVER_PROTOCOL"] = r.Proto

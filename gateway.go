@@ -366,7 +366,7 @@ func (a *App) serveManifest(w http.ResponseWriter, r *http.Request, m Manifest) 
 	case m.Static != nil:
 		a.serveStatic(w, r, m.Static)
 	case m.CGI != nil:
-		a.serveCGI(w, r, m.CGI)
+		a.serveCGI(w, r, m.CGI, m.Sandbox)
 	default:
 		a.serveProcess(w, r)
 	}
@@ -497,6 +497,7 @@ func (a *App) start() {
 		return
 	}
 	pc := *a.manifest.Process
+	sandbox := a.manifest.Sandbox
 	port := a.port
 	ctx, cancel := context.WithTimeout(a.gw.ctx, pc.StartupTimeout.Duration)
 	a.startCancel = cancel
@@ -514,7 +515,7 @@ func (a *App) start() {
 		a.startFailed(err)
 		return
 	}
-	cmd := appCommand(a.dir, pc.WorkingDirectory, interpolate(pc.Command, env))
+	cmd := appCommand(a.dir, pc.WorkingDirectory, interpolate(pc.Command, env), sandbox)
 	cmd.Env = envList(env)
 	cmd.Stdout = &logWriter{prefix: "app=" + a.name + " stream=stdout "}
 	cmd.Stderr = &logWriter{prefix: "app=" + a.name + " stream=stderr "}

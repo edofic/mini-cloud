@@ -91,6 +91,7 @@ func (a *App) runJob(j CronConfig, run *cronRun, invocation *jobInvocation) {
 	vars := map[string]string{}
 	work := "."
 	a.mu.Lock()
+	sandbox := a.manifest.Sandbox
 	if a.manifest.Process != nil {
 		files = a.manifest.Process.EnvironmentFiles
 		for k, v := range a.manifest.Process.Environment {
@@ -114,7 +115,7 @@ func (a *App) runJob(j CronConfig, run *cronRun, invocation *jobInvocation) {
 		return
 	}
 	args := interpolate(j.Command, env)
-	cmd := appCommand(a.dir, work, args)
+	cmd := appCommand(a.dir, work, args, sandbox)
 	cmd.Env = envList(env)
 	cmd.Stdout = &logWriter{prefix: "app=" + a.name + " job=" + j.Name + " stream=stdout "}
 	cmd.Stderr = &logWriter{prefix: "app=" + a.name + " job=" + j.Name + " stream=stderr "}

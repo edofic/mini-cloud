@@ -18,6 +18,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Test
