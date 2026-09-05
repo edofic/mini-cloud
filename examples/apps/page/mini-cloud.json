@@ -1,0 +1,11 @@
+{
+  "display_name": "Static page",
+  "description": "A live-editable static site.",
+  "icon": "public/favicon.svg",
+  "access": "public",
+  "static": {
+    "root": "public",
+    "spa_fallback": "index.html",
+    "browse": false
+  }
+}

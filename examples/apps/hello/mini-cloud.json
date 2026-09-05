@@ -1,0 +1,35 @@
+{
+  "access": "authenticated",
+  "access_users": ["demo"],
+  "access_groups": ["admin"],
+  "process": {
+    "command": ["./server.py", "--port", "${PORT}"],
+    "working_directory": ".",
+    "environment_files": [".env"],
+    "startup_timeout": "10s",
+    "shutdown_timeout": "3s",
+    "readiness": {
+      "type": "http",
+      "path": "/health"
+    },
+    "restart": {
+      "policy": "on-failure",
+      "delay": "1s",
+      "maximum_attempts": 5
+    }
+  },
+  "idle": "5s",
+  "watch": {
+    "ignore": ["data"]
+  },
+  "cron": [
+    {
+      "name": "heartbeat",
+      "schedule": "*/5 * * * *",
+      "command": ["./heartbeat.sh"],
+      "timeout": "10s",
+      "overlap": "forbid",
+      "missed": "skip"
+    }
+  ]
+}

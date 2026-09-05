@@ -1,0 +1,15 @@
+# Mini-cloud apps
+
+This directory (`{{.AppsDir}}`) is the live application root for **mini-cloud**, a small home-server gateway for imperatively managed services and static pages. Each immediate child directory containing a `mini-cloud.json` manifest is treated as one application. The directory name is the application name and, by default, becomes `<name>.{{.BaseDomain}}`.
+
+Files here are live and mutable. Mini-cloud watches application directories: static and CGI changes apply on the next request, while changes to a running process app cause it to drain in-flight requests and restart. Do not assume releases, builds, Git operations, migrations, or rollback are managed by the platform; those remain the application's responsibility.
+
+## Version control
+
+Every real application in this directory must be its own Git repository. The small `cgi`, `hello`, and `page` applications are mini-cloud demos and are exempt from this requirement.
+
+Follow normal `.gitignore` best practices. Ignore sensitive or private runtime data (such as `.env` files, credentials, and databases containing user data), large or reproducible build outputs, dependency caches, logs, coverage output, editor/OS metadata, and temporary files. Keep source code, lockfiles, migrations, example configuration, and other inputs needed to reproduce the app tracked. Prefer app-specific patterns over broad rules that could hide important files.
+
+When changing a real application, commit the completed, verified change to that application's repository automatically. Make focused commits as work progresses, and do not leave finished agent changes uncommitted. Preserve unrelated user changes and never amend, squash, reset, or rewrite existing history unless the user explicitly asks.
+
+Use the `$mini-cloud-app` skill when creating, configuring, or troubleshooting an application or its `mini-cloud.json` manifest.

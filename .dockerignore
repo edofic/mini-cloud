@@ -1,0 +1,6 @@
+.git
+.github
+result
+result-*
+.direnv
+*.log

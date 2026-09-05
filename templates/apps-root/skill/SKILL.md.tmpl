@@ -1,0 +1,39 @@
+---
+name: mini-cloud-app
+description: Create, configure, and troubleshoot mini-cloud applications and manifests. Use when adding an application under {{.AppsDir}}; creating or editing mini-cloud.json; choosing or configuring process, static, or CGI runtimes; or working with readiness, idle shutdown, file watching, cron, access, hostnames, tile metadata, icons, environment files, assigned ports, and mini-cloud runtime diagnostics. Do not use for ordinary application code changes that do not affect mini-cloud integration.
+---
+
+# Mini-cloud applications
+
+## Workflow
+
+1. Identify the application directory and inspect its existing `mini-cloud.json`, if present.
+2. Read [references/manifest.md](references/manifest.md) before creating or changing a manifest. Use only the sections relevant to the requested runtime or feature.
+3. Inspect the application's own repository status before editing. Preserve unrelated changes and follow the root `AGENTS.md` version-control rules.
+4. Select exactly one runtime and keep the manifest aligned with how the application actually starts and serves traffic.
+5. Keep secrets and mutable runtime data out of version control and file watching. Add focused ignore rules rather than broad patterns.
+6. Validate the manifest as JSON, run the application's relevant tests, and verify runtime behavior proportionately to the change.
+
+## Operational invariants
+
+- Create applications as flat, immediate children of `{{.AppsDir}}`.
+- Make process applications listen on `127.0.0.1:$PORT`; mini-cloud supplies `PORT` and `LISTEN_ADDRESS`.
+- Treat command values as argument arrays, not implicit shell commands. Invoke `/bin/sh -c` explicitly only when shell behavior is required.
+- Treat environment files as simple `KEY=VALUE` files, not shell scripts.
+- Remember that this is a live directory: static and CGI changes apply on the next request, while changes to a running process application trigger a draining restart.
+- Mini-cloud restarts process apps but deliberately does not build them. If `process.command` runs a generated binary, ensure the deployment workflow rebuilds it before a restart, point the command at a source runner such as `go run`, or use a tracked startup script that builds into an ignored runtime directory and then `exec`s the result. Declare required build environment values in the manifest, use absolute tool paths when the service `PATH` does not include them, avoid watcher loops by ignoring generated artifacts and caches, and allow enough `startup_timeout` for a cold build.
+- Diagnose runtime state, manifest errors, assigned ports, restart counts, and cron results through the mini-cloud admin UI and systemd journal.
+
+## Stale binary troubleshooting
+
+When source changes are present but the app still serves old behavior, or a rebuild makes the app unavailable:
+
+1. Compare `process.command` with the files covered by the watcher and its ignore rules.
+2. Confirm the artifact executed by the manifest actually contains the latest change.
+3. Check whether rebuilding an ignored executable triggered a restart; rebuilding alone does not notify mini-cloud.
+4. Read the mini-cloud journal for missing compilers, runtimes, or other differences from the interactive environment.
+5. Exercise the exact startup command with a minimal environment and verify readiness before considering the change complete.
+
+## Authoritative details
+
+For exact schema, lifecycle, security, and implementation details, consult {{if .SourceDir}}the mini-cloud source checkout at `{{.SourceDir}}`{{else}}the [mini-cloud source repository](https://github.com/edofic/mini-cloud){{end}}, starting with its `README.md` and `docs/`. Runtime state and errors are available at <https://{{.AdminHost}}>.

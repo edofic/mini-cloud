@@ -1,0 +1,9 @@
+{
+  "access": "public",
+  "cgi": {
+    "command": ["./handler.sh"],
+    "working_directory": ".",
+    "timeout": "10s",
+    "maximum_concurrency": 4
+  }
+}

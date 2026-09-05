@@ -1,0 +1,7 @@
+/mini-cloud
+/mini-cloud.json
+/result
+/result-*
+/*.log
+/examples/apps/AGENTS.md
+/examples/apps/.agents/

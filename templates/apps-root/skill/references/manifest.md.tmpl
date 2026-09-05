@@ -1,0 +1,95 @@
+# Mini-cloud manifest reference
+
+## Application layout
+
+Create one flat child directory:
+
+```text
+{{.AppsDir}}/my-app/
+├── mini-cloud.json
+├── executable-or-script
+├── .env                 # optional
+└── data/                # optional; normally exclude mutable data from watching
+```
+
+The directory name is the application name and, by default, becomes `<name>.{{.BaseDomain}}`.
+
+## Runtime selection
+
+Select exactly one runtime:
+
+- `process`: Start an HTTP server on its first request and stop it after its idle timeout. Listen on `127.0.0.1:$PORT`. Mini-cloud provides `PORT` and `LISTEN_ADDRESS`; `${PORT}` and other environment values may be interpolated in command arguments.
+- `static`: Serve files directly from a configured subdirectory.
+- `cgi`: Start one RFC-style CGI command per request.
+
+### Process example
+
+```json
+{
+  "access": "authenticated",
+  "process": {
+    "command": ["./server", "--port", "${PORT}"],
+    "working_directory": ".",
+    "environment_files": [".env"],
+    "readiness": { "type": "http", "path": "/health" }
+  },
+  "idle": "5m",
+  "watch": { "ignore": ["data", "tmp"] }
+}
+```
+
+### Static example
+
+```json
+{
+  "access": "public",
+  "static": {
+    "root": "public",
+    "spa_fallback": "index.html",
+    "browse": false
+  }
+}
+```
+
+### CGI example
+
+```json
+{
+  "access": "authenticated",
+  "cgi": {
+    "command": ["./handler"],
+    "working_directory": ".",
+    "timeout": "30s",
+    "maximum_concurrency": 4
+  }
+}
+```
+
+## Common top-level fields
+
+- `host`: Optional hostname override.
+- `display_name`: Human-friendly label for the app directory at `{{.IndexHost}}`.
+- `description`: Short text shown on the app tile.
+- `icon`: App-relative image path used by the tile. Mini-cloud reads it directly without waking a process app; keep the path inside the app directory.
+- `access`: `public` or `authenticated`; defaults to authenticated.
+- `idle`: Process idle timeout; `"0s"` disables idle shutdown.
+- `watch.ignore`: Relative file or directory patterns that should not trigger restarts. Exclude databases, caches, generated files, and other mutable state.
+- `cron`: Scheduled commands using five-field cron expressions. Each entry has `name`, `schedule`, `command`, optional `timeout`, `overlap` (`forbid`, `allow`, or `replace`), and `missed` (`skip`). Cron commands do not keep the HTTP process awake.
+
+## Tile metadata
+
+```json
+{
+  "display_name": "Kitchen display",
+  "description": "Status and controls for the kitchen.",
+  "icon": "assets/favicon.svg"
+}
+```
+
+SVG, PNG, ICO, and other browser-supported image formats work. Prefer a square image. The icon is served at `/icons/<app-name>` on the app directory host; do not construct that URL manually or point `icon` at an external URL.
+
+## Commands, environment, and diagnostics
+
+Environment files use simple `KEY=VALUE` lines and are not shell scripts. Commands are argument arrays and do not implicitly run through a shell. Use an explicit `[/bin/sh, -c, ...]` command only when shell behavior is required.
+
+Application stdout and stderr go to the mini-cloud systemd journal. Runtime state, manifest errors, assigned ports, restart counts, and cron results are visible at <https://{{.AdminHost}}>.

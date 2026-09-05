@@ -1,0 +1,17 @@
+{
+  "listen": "127.0.0.1:9080",
+  "apps_dir": "./examples/apps",
+  "base_domain": "apps.test",
+  "index_host": "apps.test",
+  "admin_host": "admin.apps.test",
+  "scan_interval": "500ms",
+  "default_idle": "5m",
+  "ports": {
+    "start": 20000,
+    "end": 29999
+  },
+  "auth": {
+    "identity_header": "",
+    "admin_identity": ""
+  }
+}
