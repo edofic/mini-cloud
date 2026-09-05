@@ -1,10 +1,10 @@
 {
-  description = "A mutable, on-demand application gateway for one Linux machine";
+  description = "A mutable, on-demand application gateway for one Unix machine";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs = {self, nixpkgs}: let
-    systems = ["x86_64-linux" "aarch64-linux"];
+    systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
   in {
     packages = forAllSystems (system: let
@@ -32,7 +32,8 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in {
       default = pkgs.mkShell {
-        packages = [pkgs.go_1_27 pkgs.golangci-lint pkgs.python3 pkgs.curl pkgs.bash pkgs.bubblewrap pkgs.gcc];
+        packages = [pkgs.go_1_27 pkgs.golangci-lint pkgs.python3 pkgs.curl pkgs.bash pkgs.stdenv.cc]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [pkgs.bubblewrap];
       };
     });
 

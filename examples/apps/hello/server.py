@@ -2,6 +2,7 @@
 import argparse
 import http.server
 import os
+import socketserver
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", type=int, required=True)
@@ -19,4 +20,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-http.server.ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+class Server(http.server.ThreadingHTTPServer):
+    # http.server resolves the bound address back to a hostname on startup,
+    # and reverse DNS for loopback can stall for tens of seconds on macOS
+    # hosts with slow or broken resolvers. The example binds a literal
+    # address, so use it directly and skip the lookup.
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.socket.getsockname()[:2]
+        self.server_name = host
+        self.server_port = port
+
+server = Server(("127.0.0.1", args.port), Handler)
+server.serve_forever()

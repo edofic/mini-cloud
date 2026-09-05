@@ -51,6 +51,16 @@ func TestStaticConfinement(t *testing.T) {
 	if w.Code != 200 || w.Body.String() != "inside" {
 		t.Fatalf("inside link: %d %s", w.Code, w.Body)
 	}
+
+	alias := filepath.Join(t.TempDir(), "app")
+	if err := os.Symlink(dir, alias); err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	(&App{dir: alias}).serveStatic(w, httptest.NewRequest("GET", "/ok", nil), &StaticConfig{Root: "public"})
+	if w.Code != 200 || w.Body.String() != "inside" {
+		t.Fatalf("symlinked app root: %d %s", w.Code, w.Body)
+	}
 }
 
 func TestCGIHeaderBoundsAndStatus(t *testing.T) {

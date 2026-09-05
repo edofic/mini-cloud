@@ -27,7 +27,6 @@ Select exactly one runtime:
 ```json
 {
   "access": "authenticated",
-  "sandbox": "bubblewrap",
   "process": {
     "command": ["./server", "--port", "${PORT}"],
     "working_directory": ".",
@@ -73,7 +72,7 @@ Select exactly one runtime:
 - `description`: Short text shown on the app tile.
 - `icon`: App-relative image path used by the tile. Mini-cloud reads it directly without waking a process app; keep the path inside the app directory.
 - `access`: `public` or `authenticated`; defaults to authenticated.
-- `sandbox`: Optional `bubblewrap`; applies a lightweight namespace and read-only-host-filesystem preset to process, CGI, and cron commands. The app directory remains writable and networking remains shared.
+- `sandbox`: Linux-only optional `bubblewrap`; applies a lightweight namespace and read-only-host-filesystem preset to process, CGI, and cron commands. The app directory remains writable and networking remains shared. Omit it on macOS.
 - `idle`: Process idle timeout; `"0s"` disables idle shutdown.
 - `watch.ignore`: Relative file or directory patterns that should not trigger restarts. Exclude databases, caches, generated files, and other mutable state.
 - `cron`: Scheduled commands using five-field cron expressions. Each entry has `name`, `schedule`, `command`, optional `timeout`, `overlap` (`forbid`, `allow`, or `replace`), and `missed` (`skip`). Cron commands do not keep the HTTP process awake.
@@ -94,4 +93,4 @@ SVG, PNG, ICO, and other browser-supported image formats work. Prefer a square i
 
 Environment files use simple `KEY=VALUE` lines and are not shell scripts. Commands are argument arrays and do not implicitly run through a shell. Use an explicit `[/bin/sh, -c, ...]` command only when shell behavior is required.
 
-Application stdout and stderr go to the mini-cloud systemd journal. Runtime state, manifest errors, assigned ports, restart counts, and cron results are visible at <https://{{.AdminHost}}>.
+Application stdout and stderr go to the mini-cloud service logs. Runtime state, manifest errors, assigned ports, restart counts, and cron results are visible at <https://{{.AdminHost}}>.

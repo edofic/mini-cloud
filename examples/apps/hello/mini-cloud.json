@@ -3,7 +3,7 @@
   "access_users": ["demo"],
   "access_groups": ["admin"],
   "process": {
-    "command": ["./server.py", "--port", "${PORT}"],
+    "command": ["python3", "./server.py", "--port", "${PORT}"],
     "working_directory": ".",
     "environment_files": [".env"],
     "startup_timeout": "10s",

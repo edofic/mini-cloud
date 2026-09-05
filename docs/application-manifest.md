@@ -24,7 +24,7 @@ Common fields:
 
 `display_name`, `description`, and `icon` customize the lightweight app directory. `icon` is an app-relative image path served directly by mini-cloud; it does not wake a stopped process. Its resolved path must remain within the app directory. `access` is `public` or `authenticated` and defaults to authenticated.
 
-`sandbox` is optional. Set it to `"bubblewrap"` to run every command belonging to the app—process, CGI, and cron—inside the built-in bubblewrap preset. Omit it to execute commands directly as before. Static file serving is performed by the gateway and is not sandboxed, though cron commands on a static app are.
+`sandbox` is optional and Linux-only. On Linux, set it to `"bubblewrap"` to run every command belonging to the app—process, CGI, and cron—inside the built-in bubblewrap preset. Omit it to execute commands directly. macOS rejects a manifest that requests Bubblewrap. Static file serving is performed by the gateway and is not sandboxed, though cron commands on a static app are.
 
 The preset gives commands private user, PID, IPC, UTS, mount, `/tmp`, `/proc`, and `/dev` namespaces, plus a private cgroup namespace where the host supports one. The app directory stays writable at its existing absolute path, while the rest of the host filesystem is visible read-only so installed runtimes and libraries continue to work. Networking is shared with the host because process apps must bind the gateway-assigned loopback port. Bubblewrap must be installed as `bwrap` on the gateway `PATH`, and the host must permit unprivileged user namespaces. Failure to create the sandbox is reported as a normal process/CGI/cron start error.
 

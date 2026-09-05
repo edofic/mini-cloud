@@ -32,6 +32,8 @@ The configured admin host shows runtime type, access, sandbox mode, state, port,
 
 SIGTERM stops HTTP and terminates child process groups. Production systemd configuration should perform cgroup-wide cleanup after crashes. On restart, process apps begin stopped and return on demand; static and CGI apps work immediately.
 
+macOS graceful shutdown has the same process-group behavior, but launchd cannot currently guarantee cleanup of application groups after a gateway crash or SIGKILL. Descendants can survive such an exit. See the [macOS process cleanup limitation](macos.md#process-cleanup-limitation); closing this gap is an explicit lifecycle TODO.
+
 ## Deployment remains external
 
 Edit files directly, use Git in the directory, or point a command through your own `current` symlink (subject to the scanning limitations above). The gateway observes changes but owns none of those strategies.

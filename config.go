@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -196,8 +197,8 @@ func loadManifest(dir string) (Manifest, error) {
 	if m.Access == "public" && (len(m.AccessUsers) != 0 || len(m.AccessGroups) != 0) {
 		return m, fmt.Errorf("access_users and access_groups require authenticated access")
 	}
-	if m.Sandbox != "" && m.Sandbox != "bubblewrap" {
-		return m, fmt.Errorf("sandbox must be bubblewrap or omitted")
+	if err := validateSandbox(m.Sandbox, runtime.GOOS); err != nil {
+		return m, err
 	}
 	if m.AccessUsers, err = normalizePrincipals("access_users", m.AccessUsers); err != nil {
 		return m, err
@@ -288,6 +289,16 @@ func loadManifest(dir string) (Manifest, error) {
 		}
 	}
 	return m, nil
+}
+
+func validateSandbox(sandbox, goos string) error {
+	if sandbox != "" && sandbox != "bubblewrap" {
+		return fmt.Errorf("sandbox must be bubblewrap or omitted")
+	}
+	if sandbox == "bubblewrap" && goos != "linux" {
+		return fmt.Errorf("sandbox bubblewrap is supported only on Linux")
+	}
+	return nil
 }
 
 func normalizePrincipals(field string, values []string) ([]string, error) {

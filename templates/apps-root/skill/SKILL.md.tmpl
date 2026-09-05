@@ -22,7 +22,7 @@ description: Create, configure, and troubleshoot mini-cloud applications and man
 - Treat environment files as simple `KEY=VALUE` files, not shell scripts.
 - Remember that this is a live directory: static and CGI changes apply on the next request, while changes to a running process application trigger a draining restart.
 - Mini-cloud restarts process apps but deliberately does not build them. If `process.command` runs a generated binary, ensure the deployment workflow rebuilds it before a restart, point the command at a source runner such as `go run`, or use a tracked startup script that builds into an ignored runtime directory and then `exec`s the result. Declare required build environment values in the manifest, use absolute tool paths when the service `PATH` does not include them, avoid watcher loops by ignoring generated artifacts and caches, and allow enough `startup_timeout` for a cold build.
-- Diagnose runtime state, manifest errors, assigned ports, restart counts, and cron results through the mini-cloud admin UI and systemd journal.
+- Diagnose runtime state, manifest errors, assigned ports, restart counts, and cron results through the mini-cloud admin UI and service logs.
 
 ## Stale binary troubleshooting
 
@@ -31,7 +31,7 @@ When source changes are present but the app still serves old behavior, or a rebu
 1. Compare `process.command` with the files covered by the watcher and its ignore rules.
 2. Confirm the artifact executed by the manifest actually contains the latest change.
 3. Check whether rebuilding an ignored executable triggered a restart; rebuilding alone does not notify mini-cloud.
-4. Read the mini-cloud journal for missing compilers, runtimes, or other differences from the interactive environment.
+4. Read the mini-cloud service logs for missing compilers, runtimes, or other differences from the interactive environment.
 5. Exercise the exact startup command with a minimal environment and verify readiness before considering the change complete.
 
 ## Authoritative details

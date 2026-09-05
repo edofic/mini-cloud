@@ -61,6 +61,26 @@ func TestRejectInvalidManifestSettings(t *testing.T) {
 	}
 }
 
+func TestSandboxPlatformSupport(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sandbox string
+		goos    string
+		wantErr bool
+	}{
+		{name: "omitted on darwin", goos: "darwin"},
+		{name: "bubblewrap on linux", sandbox: "bubblewrap", goos: "linux"},
+		{name: "bubblewrap on darwin", sandbox: "bubblewrap", goos: "darwin", wantErr: true},
+		{name: "unknown", sandbox: "docker", goos: "linux", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := validateSandbox(tc.sandbox, tc.goos); (got != nil) != tc.wantErr {
+				t.Fatalf("validateSandbox(%q, %q) error = %v, wantErr %v", tc.sandbox, tc.goos, got, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestRejectInvalidGatewaySettings(t *testing.T) {
 	for _, setting := range []string{`"scan_interval":"0s"`, `"scan_interval":"-1s"`, `"default_idle":"-1s"`, `"ports":{"start":20000,"end":70000}`, `"auth":{"timeout":"0s"}`, `"index_host":"same.localhost","admin_host":"same.localhost"`} {
 		p := filepath.Join(t.TempDir(), "config.json")

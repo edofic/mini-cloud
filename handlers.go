@@ -24,6 +24,11 @@ func (a *App) serveStatic(w http.ResponseWriter, r *http.Request, c *StaticConfi
 		http.NotFound(w, r)
 		return
 	}
+	rootPath, err = filepath.EvalSymlinks(rootPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	name := strings.TrimPrefix(filepath.Clean("/"+r.URL.Path), "/")
 	if name == "" {
 		name = "."

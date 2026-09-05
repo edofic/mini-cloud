@@ -10,7 +10,7 @@ clients -> Caddy -> mini-cloud -> static files
 
 Each immediate child of `apps_dir` is identified by its directory name. A child is an app only when it contains `mini-cloud.json`. Files remain in place and mutable; the gateway never copies, builds, versions, releases, or rolls them back.
 
-Command-based apps may opt into a fixed bubblewrap namespace preset. The gateway still directly creates and supervises those children; it does not create images, copy application files, or add a release lifecycle. The app directory is bind-mounted writable and the host supplies read-only runtimes and libraries.
+On Linux, command-based apps may opt into a fixed Bubblewrap namespace preset. The gateway still directly creates and supervises those children; it does not create images, copy application files, or add a release lifecycle. The app directory is bind-mounted writable and the host supplies read-only runtimes and libraries. macOS runs command-based apps without that optional sandbox.
 
 The last successfully parsed manifest remains active. An invalid edit is logged and displayed on the admin page without breaking the running configuration.
 
@@ -38,9 +38,11 @@ The directory name is hashed into the configured range using FNV-1a. Collisions 
 
 Apps receive `PORT` and `LISTEN_ADDRESS`. Command arguments support `${NAME}` interpolation after environment files and manifest values are loaded.
 
-## Systemd boundary
+## Service-supervisor boundary
 
 Production integration should supervise the gateway as one system service with a dedicated unprivileged user, restart it after failure, and clean up its entire cgroup. There are deliberately no per-app units or timers. A gateway restart kills all descendants and begins with process apps stopped, avoiding unsafe orphan adoption.
+
+On macOS, launchd can supervise and restart the gateway, but its cleanup does not cover the separate process groups used for applications. Graceful stops remain complete; descendants may survive a crash or SIGKILL. Reliable crash cleanup without weakening normal per-application signaling is a documented implementation TODO. See the [macOS guide](macos.md#process-cleanup-limitation).
 
 ## Non-goals
 

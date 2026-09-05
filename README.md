@@ -1,6 +1,6 @@
 # mini-cloud
 
-mini-cloud is a small gateway for running mutable applications on one Linux machine. Put an application in a directory, edit it in place, and reach it through a hostname. HTTP processes start on demand and stop when idle; static files and CGI are also supported. Command-based apps can opt into a bubblewrap “containers lite” sandbox.
+mini-cloud is a small gateway for running mutable applications on one Linux or macOS machine. Put an application in a directory, edit it in place, and reach it through a hostname. HTTP processes start on demand and stop when idle; static files and CGI are also supported. On Linux, command-based apps can opt into a bubblewrap “containers lite” sandbox.
 
 Each application directory contains a `mini-cloud.json` manifest. mini-cloud discovers it, serves static files or CGI, or starts an HTTP process on the first request. It watches the directory, drains requests before restarting changed processes, runs manifest cron jobs, and exposes a small app index and admin view.
 
@@ -8,7 +8,7 @@ When the gateway starts, it also installs generated `AGENTS.md` guidance and a `
 
 ## Quick start
 
-Run these commands from the repository root on Linux. Enter `nix develop` for the included tools, or provide Go 1.27, Python 3, bubblewrap, a POSIX shell, and curl yourself. The example configuration disables authentication and listens only on loopback; its CGI example demonstrates the optional sandbox.
+Run these commands from the repository root on Linux or macOS. Enter `nix develop` for the included tools, or provide Go 1.27, Python 3, a POSIX shell, and curl yourself. Bubblewrap is also included in the Linux development shell. The example configuration disables authentication and listens only on loopback.
 
 ```sh
 go run . -config mini-cloud.example.json
@@ -50,15 +50,18 @@ golangci-lint run
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [development guide](docs/development.md).
 
-## NixOS and containers
+## Deployment
 
 The flake exports the package, development shell, and `nixosModules.default`. The module creates one systemd service and a mutable apps directory; configure it with `services.mini-cloud.settings` and keep secrets outside the generated Nix-store JSON. See [NixOS setup](docs/nixos.md).
+
+Native macOS builds and a sample launchd configuration are covered in the [macOS guide](docs/macos.md). macOS currently has a documented crash-cleanup limitation for child processes.
 
 The [Docker guide](docs/docker.md) covers the unprivileged image, mounted applications, and runtime configuration. The image packages the gateway and example runtime tools; it is not an application-isolation boundary.
 
 ## Guides and examples
 
 - [Detailed setup and use](docs/guide.md)
+- [macOS setup](docs/macos.md)
 - [Gateway configuration](docs/gateway-configuration.md)
 - [Application manifests](docs/application-manifest.md)
 - [Operations and lifecycle](docs/operations.md)

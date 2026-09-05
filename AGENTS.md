@@ -1,6 +1,6 @@
 # mini-cloud maintenance instructions
 
-Keep the project self-contained and dependency-free unless a dependency materially simplifies a feature and is explicitly justified. The gateway is for one Linux machine and one trusted deployment user; do not expand it into a distributed orchestrator or release manager.
+Keep the project self-contained and dependency-free unless a dependency materially simplifies a feature and is explicitly justified. The gateway is for one Linux or macOS machine and one trusted deployment user; do not expand it into a distributed orchestrator or release manager.
 
 The application directory is authoritative and mutable. Never introduce gateway-managed releases, artifact copying, source control, builds, migrations, or rollback. Preserve the ability to live-edit files. Invalid manifests must leave the last valid configuration active and expose the error in the admin UI.
 

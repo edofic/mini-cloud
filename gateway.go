@@ -543,6 +543,7 @@ func (a *App) start() {
 	if err != nil {
 		a.state = "stopping"
 		a.stateError = err.Error()
+		log.Printf("app=%s event=readiness_failed error=%q port=%d", a.name, err, port)
 		a.mu.Unlock()
 		a.kill(cmd, pc.ShutdownTimeout.Duration)
 		a.mu.Lock()

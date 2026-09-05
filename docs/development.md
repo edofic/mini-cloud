@@ -1,6 +1,6 @@
 # Development and testing
 
-The project targets Linux and Go 1.27 and uses only the standard library. The examples and integration tests also need Python 3, a POSIX shell, curl, and standard Unix utilities. Race tests need a C compiler and a Go distribution with the race runtime.
+The project targets Linux and macOS with Go 1.27 and uses only the standard library. The examples and integration tests also need Python 3, a POSIX shell, curl, and standard Unix utilities. Race tests need a C compiler and a Go distribution with the race runtime. Bubblewrap tests run only on Linux.
 
 The Nix flake supplies the development tools:
 
@@ -23,7 +23,7 @@ Integration tests start a real HTTP child, proxy through it, edit its manifest, 
 
 For lifecycle changes, also consider simultaneous cold requests, an edit during an active request, startup exit, idle/new-request races, SIGTERM with descendants, WebSocket drains, and cron overlap policies.
 
-CI checks formatting without changing files, runs the tests, race detector, vet, linter, and example smoke tests, and builds the Docker image. The linter uses its standard checks; fix reported issues rather than disabling checks globally.
+CI checks formatting without changing files and runs the tests, race detector, vet, and example smoke tests on Linux and macOS. Linux CI also runs the linter, Bubblewrap test, and Docker build. The linter uses its standard checks; fix reported issues rather than disabling checks globally.
 
 If a Nix-provided Go distribution reports `package mini-cloud: cannot find package` only with `-race`, check whether its race runtime is present. CI requires race tests on the official Linux Go distribution.
 
