@@ -40,5 +40,7 @@ curl -fsS -H 'Host: page.apps.test' "http://127.0.0.1:$test_port/" | grep -q 'St
 curl -fsS -H 'Host: cgi.apps.test' "http://127.0.0.1:$test_port/example" | grep -q 'CGI process handled GET /example'
 curl -fsS -H 'Host: admin.apps.test' "http://127.0.0.1:$test_port/api/apps" | grep -q '"Name":"hello"'
 curl -fsS -H 'Host: apps.test' "http://127.0.0.1:$test_port/" | grep -q 'Static page'
+curl -fsS -H "Host: apps.test:$test_port" "http://127.0.0.1:$test_port/" | grep -q "href=\"//hello.apps.test:$test_port/\""
+curl -fsS -H "Host: admin.apps.test:$test_port" "http://127.0.0.1:$test_port/" | grep -q "href=\"//hello.apps.test:$test_port/\""
 
 printf 'example smoke tests passed\n'
