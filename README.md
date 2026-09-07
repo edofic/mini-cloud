@@ -24,7 +24,7 @@ curl -H 'Host: apps.test' http://127.0.0.1:9080/
 curl -H 'Host: admin.apps.test' http://127.0.0.1:9080/
 ```
 
-The `Host` headers select an app without DNS setup; requesting the listener by IP alone returns 404. For browser access, map `apps.test`, `admin.apps.test`, and the three app hostnames to `127.0.0.1` in your hosts file, then use port `9080`.
+The `Host` headers select an app without DNS setup; requesting the listener by IP alone returns 404. For browser access, map `apps.test`, `admin.apps.test`, and the three app hostnames to `127.0.0.1` in your hosts file, then use `http://apps.test:9080/`. App links in the index and admin view preserve the page’s protocol and port.
 
 Edit `examples/apps/hello/server.py` or `examples/apps/hello/.env` and request it again. Static files are live immediately; a changed process is drained and restarted. Stop the gateway with Ctrl-C.
 

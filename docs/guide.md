@@ -61,6 +61,8 @@ On Linux, add `"sandbox": "bubblewrap"` at the manifest's top level to place pro
 
 Public apps skip verification. Authenticated apps use the configured identity header or verifier endpoint. `access_users` and `access_groups` are exact-match allow lists with OR semantics. The app index filters entries using those same rules. With authentication enabled, the admin host requires authentication; set `admin_identity` to restrict it to one identity. Keep the listener on loopback and strip client-supplied identity headers at the proxy.
 
+App links in the index and admin page inherit the browser’s HTTP or HTTPS scheme and preserve the port in the request’s `Host` header. For local examples, open `http://apps.test:9080/`; links stay on HTTP port `9080`. A reverse proxy must preserve the original public `Host` header, including its port when present. Apps linked from these pages must be reachable on that same scheme and port.
+
 The admin page and `/api/apps` show state, port, active requests, restart information, cron results, and manifest/process errors. They do not control processes or deploy files.
 
 ## CGI and cron
