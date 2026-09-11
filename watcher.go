@@ -77,7 +77,7 @@ func watchEventAffectsRoot(root, path string) bool {
 }
 
 func (g *Gateway) watch(ctx context.Context, w *fsnotify.Watcher) {
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	var timer *time.Timer
 	var timerC <-chan time.Time
 	queue := func() {
