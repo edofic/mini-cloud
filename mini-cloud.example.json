@@ -4,7 +4,6 @@
   "base_domain": "apps.test",
   "index_host": "apps.test",
   "admin_host": "admin.apps.test",
-  "scan_interval": "500ms",
   "default_idle": "5m",
   "ports": {
     "start": 20000,

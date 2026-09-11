@@ -32,15 +32,14 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 type Config struct {
-	Listen       string     `json:"listen"`
-	AppsDir      string     `json:"apps_dir"`
-	BaseDomain   string     `json:"base_domain"`
-	IndexHost    string     `json:"index_host"`
-	AdminHost    string     `json:"admin_host"`
-	ScanInterval Duration   `json:"scan_interval"`
-	DefaultIdle  Duration   `json:"default_idle"`
-	Ports        PortRange  `json:"ports"`
-	Auth         AuthConfig `json:"auth"`
+	Listen      string     `json:"listen"`
+	AppsDir     string     `json:"apps_dir"`
+	BaseDomain  string     `json:"base_domain"`
+	IndexHost   string     `json:"index_host"`
+	AdminHost   string     `json:"admin_host"`
+	DefaultIdle Duration   `json:"default_idle"`
+	Ports       PortRange  `json:"ports"`
+	Auth        AuthConfig `json:"auth"`
 }
 
 type PortRange struct {
@@ -57,7 +56,7 @@ type AuthConfig struct {
 }
 
 func loadConfig(path string) (Config, error) {
-	c := Config{Listen: "127.0.0.1:9080", BaseDomain: "apps.localhost", IndexHost: "apps.localhost", AdminHost: "admin.apps.localhost", ScanInterval: Duration{time.Second}, DefaultIdle: Duration{5 * time.Minute}, Ports: PortRange{20000, 29999}, Auth: AuthConfig{Timeout: Duration{5 * time.Second}, IdentityHeader: "Remote-User", GroupsHeader: "Remote-Groups", CopyHeaders: []string{"Remote-User", "Remote-Groups", "Remote-Email", "Remote-Name"}}}
+	c := Config{Listen: "127.0.0.1:9080", BaseDomain: "apps.localhost", IndexHost: "apps.localhost", AdminHost: "admin.apps.localhost", DefaultIdle: Duration{5 * time.Minute}, Ports: PortRange{20000, 29999}, Auth: AuthConfig{Timeout: Duration{5 * time.Second}, IdentityHeader: "Remote-User", GroupsHeader: "Remote-Groups", CopyHeaders: []string{"Remote-User", "Remote-Groups", "Remote-Email", "Remote-Name"}}}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
@@ -75,8 +74,8 @@ func loadConfig(path string) (Config, error) {
 	if c.Ports.Start < 1024 || c.Ports.End < c.Ports.Start || c.Ports.End > 65535 {
 		return c, fmt.Errorf("invalid port range")
 	}
-	if c.ScanInterval.Duration <= 0 || c.DefaultIdle.Duration < 0 || c.Auth.Timeout.Duration <= 0 {
-		return c, fmt.Errorf("scan_interval and auth.timeout must be positive; default_idle must be nonnegative")
+	if c.DefaultIdle.Duration < 0 || c.Auth.Timeout.Duration <= 0 {
+		return c, fmt.Errorf("auth.timeout must be positive; default_idle must be nonnegative")
 	}
 	if _, _, err := net.SplitHostPort(c.Listen); err != nil {
 		return c, fmt.Errorf("invalid listen address: %w", err)

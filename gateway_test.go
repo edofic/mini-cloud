@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,7 +34,7 @@ func TestHelperProcess(t *testing.T) {
 }
 
 func testConfig(root string) Config {
-	return Config{AppsDir: root, BaseDomain: "test", AdminHost: "admin.test", DefaultIdle: Duration{200 * time.Millisecond}, ScanInterval: Duration{20 * time.Millisecond}, Ports: PortRange{31000, 31999}}
+	return Config{AppsDir: root, BaseDomain: "test", AdminHost: "admin.test", DefaultIdle: Duration{200 * time.Millisecond}, Ports: PortRange{31000, 31999}}
 }
 func writeJSON(t *testing.T, path string, v any) {
 	t.Helper()
@@ -104,6 +105,74 @@ func TestProcessStartsRestartsAfterEditAndIdles(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	g.stopAll()
+}
+
+func TestWatchDetectsRecursiveEditsAndNewApps(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "existing")
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(dir, manifestName), Manifest{Static: &StaticConfig{Root: "src"}, Access: "public"})
+	if err := os.WriteFile(filepath.Join(dir, "src", "index.html"), []byte("one"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	g := NewGateway(testConfig(root))
+	g.ctx = t.Context()
+	w, err := newAppWatcher(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.scan(); err != nil {
+		_ = w.Close()
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		g.watch(ctx, w)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	existing := g.apps["existing"]
+	existing.mu.Lock()
+	revision := existing.revision
+	existing.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(dir, "src", "index.html"), []byte("two"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		existing.mu.Lock()
+		defer existing.mu.Unlock()
+		return existing.revision > revision
+	}, "recursive file edit was not detected")
+
+	newDir := filepath.Join(root, "new")
+	if err := os.MkdirAll(filepath.Join(newDir, "public"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(newDir, manifestName), Manifest{Static: &StaticConfig{Root: "public"}, Access: "public"})
+	waitFor(t, func() bool {
+		g.mu.RLock()
+		defer g.mu.RUnlock()
+		return g.apps["new"] != nil
+	}, "new application was not discovered")
+}
+
+func waitFor(t *testing.T, condition func() bool, message string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatal(message)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestBubblewrapProcessStartsOnSharedLoopback(t *testing.T) {

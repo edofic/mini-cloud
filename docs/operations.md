@@ -49,7 +49,7 @@ Edit files directly, use Git in the directory, or point a command through your o
 | 503 starting a process | Inspect the admin error and logs for command, environment-file, port, or readiness failures. |
 | Sandboxed command fails to start | Ensure `bwrap` is on the gateway `PATH` and the host permits unprivileged user namespaces. |
 | Process repeatedly restarts after writing data | Add output directories to `watch.ignore`. |
-| File edit does not restart a process | Check polling delay, ignored paths, symlink targets, and active requests delaying drain. |
+| File edit does not restart a process | Check ignored paths, symlink targets, filesystem watch errors in the service log, and active requests delaying drain. |
 | Startup fails while generating guidance | Make `apps_dir` writable by the gateway user. |
 
 Back up mutable application files and data using external tools. Restarting or upgrading the gateway does not preserve running application processes.

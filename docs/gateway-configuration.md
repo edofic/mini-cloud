@@ -1,6 +1,6 @@
 # Gateway configuration
 
-Gateway configuration is loaded once at startup. Restart the gateway to apply changes; application manifests are polled separately. With no `-config` argument, the gateway reads `mini-cloud.json` from its working directory.
+Gateway configuration is loaded once at startup. Restart the gateway to apply changes; application manifests and files are watched through native filesystem notifications. With no `-config` argument, the gateway reads `mini-cloud.json` from its working directory.
 
 Start with:
 
@@ -15,7 +15,6 @@ mini-cloud -config /path/to/mini-cloud.json
   "base_domain": "apps.example.test",
   "index_host": "apps.example.test",
   "admin_host": "admin.apps.example.test",
-  "scan_interval": "1s",
   "default_idle": "5m",
   "ports": { "start": 20000, "end": 29999 },
   "auth": {
@@ -40,7 +39,6 @@ Durations are JSON strings such as `"500ms"`, `"30s"`, and `"5m"`. Hostnames con
 | `base_domain` | `apps.localhost` | Suffix for derived app hostnames. |
 | `index_host` | `apps.localhost` | App directory hostname. |
 | `admin_host` | `admin.apps.localhost` | Operational overview hostname; must differ from `index_host`. |
-| `scan_interval` | `1s` | Positive interval between directory scans. |
 | `default_idle` | `5m` | Process idle timeout; `"0s"` disables it. |
 | `ports.start`, `ports.end` | `20000`, `29999` | Inclusive backend range, within 1024–65535. |
 | `auth.timeout` | `5s` | Positive verifier request timeout. |
@@ -56,7 +54,9 @@ Changing `base_domain` does not change the default index or admin hostnames; set
 
 On startup, after this configuration has been parsed and validated, mini-cloud renders its embedded `AGENTS.md` and `mini-cloud-app` skill templates into `apps_dir`. If the gateway's working directory is a mini-cloud source checkout, the generated skill links to that local checkout; otherwise it links to <https://github.com/edofic/mini-cloud>. Existing generated paths are managed by mini-cloud and replaced when their contents differ, so customize the checked-in templates rather than deployed copies. The write is atomic, and failure to generate any managed file prevents the gateway from starting.
 
-`scan_interval` controls recursive metadata polling. `default_idle` defaults to five minutes; zero disables idle shutdown. `ports` is an inclusive stable backend range and must begin above 1023.
+Filesystem notifications are debounced briefly, then application state is reconciled from disk. The watcher uses inotify on Linux and kqueue on macOS. `default_idle` defaults to five minutes; zero disables idle shutdown. `ports` is an inclusive stable backend range and must begin above 1023.
+
+The former `scan_interval` setting has been removed because the gateway no longer polls. Existing values are ignored and should be removed from configuration files.
 
 ## Authentication
 

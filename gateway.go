@@ -80,16 +80,22 @@ func (g *Gateway) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	g.ctx = ctx
+	watcher, err := newAppWatcher(g.cfg.AppsDir)
+	if err != nil {
+		return fmt.Errorf("watch applications: %w", err)
+	}
 	if err := g.scan(); err != nil {
+		_ = watcher.Close()
 		return err
 	}
 	listener, err := net.Listen("tcp", g.cfg.Listen)
 	if err != nil {
+		_ = watcher.Close()
 		return err
 	}
 	var workers sync.WaitGroup
 	workers.Add(2)
-	go func() { defer workers.Done(); g.watch(ctx) }()
+	go func() { defer workers.Done(); g.watch(ctx, watcher) }()
 	go func() { defer workers.Done(); g.schedule(ctx) }()
 	server := &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	stopped := make(chan struct{})
@@ -298,21 +304,6 @@ func (a *App) setConfigError(err error) {
 	a.configError = err.Error()
 	a.mu.Unlock()
 	log.Printf("app=%s config_error=%q", a.name, err)
-}
-
-func (g *Gateway) watch(ctx context.Context) {
-	t := time.NewTicker(g.cfg.ScanInterval.Duration)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			if err := g.scan(); err != nil {
-				log.Printf("scan error: %v", err)
-			}
-		}
-	}
 }
 
 func snapshotDir(root string, ignores []string) (string, error) {

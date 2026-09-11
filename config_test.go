@@ -82,7 +82,7 @@ func TestSandboxPlatformSupport(t *testing.T) {
 }
 
 func TestRejectInvalidGatewaySettings(t *testing.T) {
-	for _, setting := range []string{`"scan_interval":"0s"`, `"scan_interval":"-1s"`, `"default_idle":"-1s"`, `"ports":{"start":20000,"end":70000}`, `"auth":{"timeout":"0s"}`, `"index_host":"same.localhost","admin_host":"same.localhost"`} {
+	for _, setting := range []string{`"default_idle":"-1s"`, `"ports":{"start":20000,"end":70000}`, `"auth":{"timeout":"0s"}`, `"index_host":"same.localhost","admin_host":"same.localhost"`} {
 		p := filepath.Join(t.TempDir(), "config.json")
 		if err := os.WriteFile(p, []byte(`{"apps_dir":".",`+setting+`}`), 0600); err != nil {
 			t.Fatal(err)

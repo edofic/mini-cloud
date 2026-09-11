@@ -15,7 +15,7 @@
         pname = "mini-cloud";
         version = "0.1.0";
         src = nixpkgs.lib.cleanSource ./.;
-        vendorHash = null;
+        vendorHash = "sha256-Gt+D69n3xUiZDkV6yClL3mJFIAELl9JWPF49JYTdLH0=";
         env.CGO_ENABLED = 0;
         buildFlags = ["-buildvcs=false"];
         meta = {

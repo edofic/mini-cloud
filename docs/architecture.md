@@ -14,6 +14,8 @@ On Linux, command-based apps may opt into a fixed Bubblewrap namespace preset. T
 
 The last successfully parsed manifest remains active. An invalid edit is logged and displayed on the admin page without breaking the running configuration.
 
+Application directories are watched recursively using native filesystem notifications: inotify on Linux and kqueue on macOS. The small `fsnotify` dependency provides one maintained interface for both platform-specific APIs. Notifications are briefly debounced before the gateway reconciles directory metadata and manifests, so multi-file and atomic editor saves normally produce one lifecycle change. Newly created directories are added to the recursive watch set during reconciliation.
+
 ## Runtime types
 
 - `process`: an HTTP application launched on demand on a stable port.
