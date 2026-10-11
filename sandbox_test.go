@@ -35,7 +35,8 @@ func TestMain(m *testing.M) {
 		if conn != nil {
 			conn.Close()
 		}
-		json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel"})
+		_, utcOffset := time.Now().Zone()
+		json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel", "host_timezone_preserved": fmt.Sprint(utcOffset) == os.Getenv("EXPECTED_UTC_OFFSET")})
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
@@ -127,7 +128,8 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(g.sandboxRoot)
-	env, err := buildEnv(appDir, ".", nil, map[string]string{"HOST_SECRET_PATH": secret, "HOST_BACKEND": listener.Addr().String(), "LD_PRELOAD": "/missing/sandbox-loader-sentinel", "DECLARED_SECRET": "secret-not-in-argv"}, nil, false)
+	_, utcOffset := time.Now().Zone()
+	env, err := buildEnv(appDir, ".", nil, map[string]string{"EXPECTED_UTC_OFFSET": fmt.Sprint(utcOffset), "HOST_SECRET_PATH": secret, "HOST_BACKEND": listener.Addr().String(), "LD_PRELOAD": "/missing/sandbox-loader-sentinel", "DECLARED_SECRET": "secret-not-in-argv"}, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +156,7 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 			t.Errorf("sandbox check failed: %s", check)
 		}
 	}
-	if len(result) != 7 {
+	if len(result) != 8 {
 		t.Fatal("missing probe checks")
 	}
 }

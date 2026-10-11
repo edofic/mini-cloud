@@ -55,7 +55,8 @@ caches in the app's watch configuration.
 
 The app gets private user, PID, mount, IPC, UTS and network namespaces, a private
 cgroup namespace where supported, minimal `/dev` and `/proc`, ephemeral `/tmp`
-and `/var/tmp`, and an empty private home directory. Capabilities and further
+and `/var/tmp`, and an empty private home directory. Concrete CA files and `/etc/localtime` are
+mounted read-only for TLS and the host timezone; the rest of `/etc` stays hidden. Capabilities and further
 user namespaces are disabled. Host environment variables are not inherited;
 explicit manifest and environment-file values are installed only inside the
 namespace. They never reach Bubblewrap's host-side dynamic loader or its visible

@@ -152,8 +152,8 @@ func (g *Gateway) sandboxCommand(appDir, work string, args []string, sandbox str
 		}
 		bargs = append(bargs, "--ro-bind", p, p)
 	}
-	// Bind the concrete CA file rather than its host /etc symlink hierarchy.
-	for _, p := range []string{"/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/cert.pem"} {
+	// Bind concrete trust/timezone files rather than the host /etc hierarchy.
+	for _, p := range []string{"/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/cert.pem", "/etc/localtime"} {
 		if _, err := os.Stat(p); err == nil {
 			bargs = append(bargs, "--ro-bind", p, p)
 		}
