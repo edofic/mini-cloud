@@ -58,8 +58,16 @@ Filesystem notifications are debounced briefly, then application state is reconc
 
 The former `scan_interval` setting has been removed because the gateway no longer polls. Existing values are ignored and should be removed from configuration files.
 
+## Hardened sandbox runtime
+
+The optional `sandbox` object configures `runtime_paths`, `runtime_paths_file`,
+and `egress_connection_limit` for apps using `bubblewrap-hardened`. These are
+trusted gateway-wide deployment settings and require a restart. See
+[Hardened Bubblewrap](sandboxing.md) for fields, defaults, Nix closures and app
+requirements. The compatible legacy `bubblewrap` profile does not need them.
+
 ## Authentication
 
 `auth.identity_header` is the trusted authenticated identity and `auth.groups_header` is the comma-separated group list used by manifest `access_groups`; they default to `Remote-User` and `Remote-Groups`. When the identity header is absent and `verify_url` is configured, mini-cloud forwards the request headers and original request metadata to that authorization endpoint. A successful response must return the identity header; fields listed in `copy_headers` are added to the application request. Include the configured identity header in `copy_headers`; a successful verifier response without a copied identity produces 502. Include the configured groups header when any manifest uses group restrictions. Authorization redirects and failures are returned to the client without being followed. Without either a trusted identity header on the request or `verify_url`, an authenticated app returns 401. A verified identity outside the manifest allow lists receives 403. An empty identity-header setting disables authentication and manifest principal checks for local development. When authentication is enabled and `admin_identity` is nonempty, the admin host requires that exact trusted or verifier-supplied identity.
 
-Because public and protected apps share the gateway, Caddy must not reject every anonymous wildcard request upfront. It should strip client-supplied identity headers and proxy to mini-cloud. Mini-cloud skips verification for public apps and calls `verify_url` for protected apps.
+For a private wildcard ingress serving public and protected apps, Caddy should permit anonymous requests to reach the gateway. A separate public ingress can instead allowlist selected app hosts and require authentication on all their paths. It should strip client-supplied identity headers and proxy to mini-cloud. Mini-cloud skips verification for public apps and calls `verify_url` for protected apps.

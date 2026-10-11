@@ -1,0 +1,21 @@
+{
+  "display_name": "Hardened Go example",
+  "sandbox": "bubblewrap-hardened",
+  "process": {
+    "command": [
+      "go",
+      "run",
+      "."
+    ],
+    "readiness": {
+      "type": "http",
+      "path": "/health"
+    }
+  },
+  "watch": {
+    "ignore": [
+      "data",
+      "tmp"
+    ]
+  }
+}

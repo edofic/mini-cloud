@@ -37,3 +37,9 @@ When source changes are present but the app still serves old behavior, or a rebu
 ## Authoritative details
 
 For exact schema, lifecycle, security, and implementation details, consult {{if .SourceDir}}the mini-cloud source checkout at `{{.SourceDir}}`{{else}}the [mini-cloud source repository](https://github.com/edofic/mini-cloud){{end}}, starting with its `README.md` and `docs/`. Runtime state and errors are available at <https://{{.AdminHost}}>.
+
+For a public-facing app, consider the Linux-only `bubblewrap-hardened` profile:
+app code is read-only, data/tmp are writable, and networking is denied except
+explicit HTTP(S) destinations. Process apps must support LISTEN_NETWORK=unix.
+Read `docs/sandboxing.md` for runtime closures and sandbox_options; keep the
+legacy `bubblewrap` profile when host filesystem/network compatibility is needed.

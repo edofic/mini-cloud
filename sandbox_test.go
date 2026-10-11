@@ -1,0 +1,279 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "sandbox-exec" {
+		if err := sandboxExec(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "sandbox-probe" {
+		codeErr := os.WriteFile("code.txt", []byte("modified"), 0600)
+		dataErr := os.WriteFile("data/write.txt", []byte("allowed"), 0600)
+		_, secretErr := os.ReadFile(os.Getenv("HOST_SECRET_PATH"))
+		resp, egressErr := http.Get("https://api.openai.com/v1/models")
+		egressDenied := egressErr != nil || resp.StatusCode == 403
+		if resp != nil {
+			resp.Body.Close()
+		}
+		conn, hostErr := net.DialTimeout("tcp", os.Getenv("HOST_BACKEND"), 200*time.Millisecond)
+		if conn != nil {
+			conn.Close()
+		}
+		json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel"})
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+func TestHardenedEnvironmentDoesNotInheritSecrets(t *testing.T) {
+	t.Setenv("HOST_SECRET_ENV", "secret")
+	env, err := buildEnv(t.TempDir(), ".", nil, map[string]string{"DECLARED": "visible"}, nil, false)
+	if err != nil || env["HOST_SECRET_ENV"] != "" || env["HOME"] != "/home/mini-cloud" || env["DECLARED"] != "visible" {
+		t.Fatalf("unexpected hardened environment: %v", err)
+	}
+}
+
+func TestHardenedSandboxOptionsRejectEscapes(t *testing.T) {
+	for _, path := range []string{".", "..", "../other", "/home"} {
+		m := Manifest{Sandbox: hardenedSandbox, SandboxOptions: &SandboxOptions{WritablePaths: []string{path}}}
+		if validateSandboxOptions(&m) == nil {
+			t.Fatalf("accepted writable escape %q", path)
+		}
+	}
+	m := Manifest{Sandbox: "bubblewrap", SandboxOptions: &SandboxOptions{}}
+	if validateSandboxOptions(&m) == nil {
+		t.Fatal("legacy sandbox cannot silently accept hardened options")
+	}
+}
+
+func TestEgressBlocksPrivateAndSpecialNetworks(t *testing.T) {
+	for _, ip := range []string{"127.0.0.1", "10.0.0.1", "192.168.1.1", "100.100.100.100", "169.254.169.254", "::1", "fc00::1", "fe80::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "2001:db8::1", "2002:7f00:1::"} {
+		if publicIP(net.ParseIP(ip)) {
+			t.Fatalf("accepted %s", ip)
+		}
+	}
+	for _, ip := range []string{"1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"} {
+		if !publicIP(net.ParseIP(ip)) {
+			t.Fatalf("blocked public %s", ip)
+		}
+	}
+}
+
+func TestEgressExactHostPolicyAndNoDirectAuthTunnel(t *testing.T) {
+	p := &egressPolicy{}
+	p.set(&SandboxOptions{Network: SandboxNetwork{AllowHosts: []string{"api.openai.com"}, ForwardAuth: true}}, "http://127.0.0.1:9091/api/authz/forward-auth")
+	if !p.allowed("api.openai.com") || p.allowed("other.openai.com") || p.allowed("api.openai.com.attacker.test") {
+		t.Fatal("host allowlist is not exact")
+	}
+	server := newEgressServer(p)
+	for _, target := range []string{"http://127.0.0.1/", "http://10.0.0.1/", "http://auth.mini-cloud.internal/other"} {
+		r := httptest.NewRequest("GET", target, nil)
+		w := httptest.NewRecorder()
+		server.Handler.ServeHTTP(w, r)
+		if w.Code != 403 {
+			t.Fatalf("allowed %s: %d", target, w.Code)
+		}
+	}
+	r := httptest.NewRequest("CONNECT", "http://auth.mini-cloud.internal:443", nil)
+	r.Host = "auth.mini-cloud.internal:443"
+	w := httptest.NewRecorder()
+	server.Handler.ServeHTTP(w, r)
+	if w.Code != 403 {
+		t.Fatal("auth alias permitted a tunnel")
+	}
+}
+
+func TestHardenedSandboxIntegration(t *testing.T) {
+	if os.Getenv("MINICLOUD_SANDBOX_TEST_RUNTIME") == "" {
+		t.Skip("set MINICLOUD_SANDBOX_TEST_RUNTIME to a newline-delimited runtime closure")
+	}
+	appDir := filepath.Join(t.TempDir(), "app")
+	if err := os.Mkdir(appDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "code.txt"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(filepath.Dir(appDir), "host-secret")
+	os.WriteFile(secret, []byte("secret"), 0600)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	t.Setenv("HOST_SECRET_ENV", "secret")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	g := NewGateway(Config{Sandbox: SandboxRuntime{RuntimePathsFile: os.Getenv("MINICLOUD_SANDBOX_TEST_RUNTIME")}})
+	g.ctx = ctx
+	runtimeDir, err := g.sandboxRuntime("probe", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(g.sandboxRoot)
+	env, err := buildEnv(appDir, ".", nil, map[string]string{"HOST_SECRET_PATH": secret, "HOST_BACKEND": listener.Addr().String(), "LD_PRELOAD": "/missing/sandbox-loader-sentinel", "DECLARED_SECRET": "secret-not-in-argv"}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd, err := g.sandboxCommand(appDir, ".", []string{"/run/mini-cloud/runner", "sandbox-probe"}, hardenedSandbox, nil, runtimeDir, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(cmd.Args, " "), "secret-not-in-argv") || strings.Contains(strings.Join(cmd.Env, " "), "LD_PRELOAD=") {
+		t.Fatal("app secrets or loader environment reached host launcher")
+	}
+	for _, f := range cmd.ExtraFiles {
+		defer f.Close()
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("sandbox: %v %s", err, out)
+	}
+	var result map[string]bool
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("probe output: %v %s", err, out)
+	}
+	for check, ok := range result {
+		if !ok {
+			t.Errorf("sandbox check failed: %s", check)
+		}
+	}
+	if len(result) != 7 {
+		t.Fatal("missing probe checks")
+	}
+}
+
+func TestEgressAuthAliasOnlyForwardsVerification(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/authz/forward-auth" || r.Header.Get("Cookie") != "session=test" {
+			t.Error("wrong auth forwarding")
+		}
+		w.Header().Set("Remote-User", "verified")
+		w.WriteHeader(200)
+	}))
+	defer upstream.Close()
+	p := &egressPolicy{}
+	p.set(&SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}, upstream.URL+"/api/authz/forward-auth")
+	r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal/verify", nil)
+	r.Header.Set("Cookie", "session=test")
+	w := httptest.NewRecorder()
+	newEgressServer(p).Handler.ServeHTTP(w, r)
+	if w.Code != 200 || w.Header().Get("Remote-User") != "verified" {
+		t.Fatalf("auth verification failed: %d", w.Code)
+	}
+	for _, path := range []string{"/verify?target=other", "/api/configuration", "/"} {
+		r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal"+path, strings.NewReader(""))
+		w := httptest.NewRecorder()
+		newEgressServer(p).Handler.ServeHTTP(w, r)
+		if w.Code != 403 {
+			t.Fatalf("permitted extra auth surface %s", path)
+		}
+	}
+}
+
+func TestHardenedEnvironmentFilesStayInsideApp(t *testing.T) {
+	app := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.env")
+	os.WriteFile(outside, []byte("SECRET=value"), 0600)
+	os.Symlink(outside, filepath.Join(app, "link.env"))
+	for _, path := range []string{outside, "../secret.env", "link.env"} {
+		if _, err := buildEnv(app, ".", []string{path}, nil, nil, false); err == nil {
+			t.Fatalf("read environment outside app: %s", path)
+		}
+	}
+	os.WriteFile(filepath.Join(app, "local.env"), []byte("DECLARED=ok"), 0600)
+	env, err := buildEnv(app, ".", []string{"local.env"}, nil, nil, false)
+	if err != nil || env["DECLARED"] != "ok" {
+		t.Fatalf("app environment file: %v", err)
+	}
+}
+
+func TestSandboxBackendDoesNotFollowSymlinks(t *testing.T) {
+	if os.Getenv("MINICLOUD_SANDBOX_TEST_RUNTIME") == "" {
+		t.Skip("Linux sandbox integration check")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.sock")
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	conn, err := dialSandboxBackend(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+	link := filepath.Join(dir, "link.sock")
+	os.Symlink(path, link)
+	if conn, err := dialSandboxBackend(context.Background(), link); err == nil {
+		conn.Close()
+		t.Fatal("followed app-controlled socket symlink")
+	}
+}
+
+func TestEgressConnectionLimitsIncludeIdleConnections(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	global := make(chan struct{}, 1)
+	listener := newEgressListener(inner, 1, global)
+	defer listener.Close()
+	client, err := net.Dial("tcp", inner.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	server, err := listener.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := make(chan net.Conn, 1)
+	go func() { conn, _ := listener.Accept(); accepted <- conn }()
+	excess, err := net.Dial("tcp", inner.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer excess.Close()
+	excess.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err := excess.Read(make([]byte, 1)); err == nil {
+		t.Fatal("excess connection stayed open")
+	} else if e, ok := err.(net.Error); ok && e.Timeout() {
+		t.Fatal("connection limit did not reject excess idle connection")
+	}
+	server.Close()
+	next, err := net.Dial("tcp", inner.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer next.Close()
+	select {
+	case conn := <-accepted:
+		if conn == nil {
+			t.Fatal("failed to reuse released slot")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("released slot was not reusable")
+	}
+	listener.Close()
+	if len(global) != 0 {
+		t.Fatal("listener shutdown leaked global slots")
+	}
+}

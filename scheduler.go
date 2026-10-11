@@ -92,6 +92,7 @@ func (a *App) runJob(j CronConfig, run *cronRun, invocation *jobInvocation) {
 	work := "."
 	a.mu.Lock()
 	sandbox := a.manifest.Sandbox
+	opts := a.manifest.SandboxOptions
 	if a.manifest.Process != nil {
 		files = a.manifest.Process.EnvironmentFiles
 		for k, v := range a.manifest.Process.Environment {
@@ -109,14 +110,26 @@ func (a *App) runJob(j CronConfig, run *cronRun, invocation *jobInvocation) {
 	for k, v := range j.Environment {
 		vars[k] = v
 	}
-	env, err := buildEnv(a.dir, work, files, vars, map[string]string{"APP_NAME": a.name, "CRON_JOB": j.Name})
+	env, err := buildEnv(a.dir, work, files, vars, map[string]string{"APP_NAME": a.name, "CRON_JOB": j.Name}, sandbox != hardenedSandbox)
 	if err != nil {
 		a.finishJob(run, "environment error: "+err.Error())
 		return
 	}
 	args := interpolate(j.Command, env)
-	cmd := appCommand(a.dir, work, args, sandbox)
-	cmd.Env = envList(env)
+	runtimeDir := ""
+	if sandbox == hardenedSandbox {
+		runtimeDir, err = a.gw.sandboxRuntime(a.name, opts)
+		if err != nil {
+			a.finishJob(run, "sandbox error: "+err.Error())
+			return
+		}
+	}
+	cmd, err := a.gw.sandboxCommand(a.dir, work, args, sandbox, opts, runtimeDir, env)
+	if err != nil {
+		a.finishJob(run, "sandbox error: "+err.Error())
+		return
+	}
+	defer closeChildFiles(cmd)
 	cmd.Stdout = &logWriter{prefix: "app=" + a.name + " job=" + j.Name + " stream=stdout "}
 	cmd.Stderr = &logWriter{prefix: "app=" + a.name + " job=" + j.Name + " stream=stderr "}
 	if err = a.gw.startChild(ctx, cmd); err != nil {

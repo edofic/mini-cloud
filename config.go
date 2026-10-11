@@ -32,14 +32,15 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 type Config struct {
-	Listen      string     `json:"listen"`
-	AppsDir     string     `json:"apps_dir"`
-	BaseDomain  string     `json:"base_domain"`
-	IndexHost   string     `json:"index_host"`
-	AdminHost   string     `json:"admin_host"`
-	DefaultIdle Duration   `json:"default_idle"`
-	Ports       PortRange  `json:"ports"`
-	Auth        AuthConfig `json:"auth"`
+	Listen      string         `json:"listen"`
+	AppsDir     string         `json:"apps_dir"`
+	BaseDomain  string         `json:"base_domain"`
+	IndexHost   string         `json:"index_host"`
+	AdminHost   string         `json:"admin_host"`
+	DefaultIdle Duration       `json:"default_idle"`
+	Ports       PortRange      `json:"ports"`
+	Auth        AuthConfig     `json:"auth"`
+	Sandbox     SandboxRuntime `json:"sandbox,omitempty"`
 }
 
 type PortRange struct {
@@ -88,6 +89,9 @@ func loadConfig(path string) (Config, error) {
 	if strings.EqualFold(c.IndexHost, c.AdminHost) {
 		return c, fmt.Errorf("index_host and admin_host must differ")
 	}
+	if c.Sandbox.EgressConnectionLimit < 0 || c.Sandbox.EgressConnectionLimit > 4096 {
+		return c, fmt.Errorf("sandbox.egress_connection_limit must be 0 (default) or 1..4096")
+	}
 	if c.Auth.VerifyURL != "" {
 		u, err := url.Parse(c.Auth.VerifyURL)
 		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
@@ -98,20 +102,21 @@ func loadConfig(path string) (Config, error) {
 }
 
 type Manifest struct {
-	Host         string         `json:"host"`
-	DisplayName  string         `json:"display_name"`
-	Description  string         `json:"description"`
-	Icon         string         `json:"icon"`
-	Access       string         `json:"access"`
-	AccessUsers  []string       `json:"access_users,omitempty"`
-	AccessGroups []string       `json:"access_groups,omitempty"`
-	Sandbox      string         `json:"sandbox,omitempty"`
-	Process      *ProcessConfig `json:"process,omitempty"`
-	Static       *StaticConfig  `json:"static,omitempty"`
-	CGI          *CGIConfig     `json:"cgi,omitempty"`
-	Idle         *Duration      `json:"idle,omitempty"`
-	Watch        WatchConfig    `json:"watch"`
-	Cron         []CronConfig   `json:"cron"`
+	Host           string          `json:"host"`
+	DisplayName    string          `json:"display_name"`
+	Description    string          `json:"description"`
+	Icon           string          `json:"icon"`
+	Access         string          `json:"access"`
+	AccessUsers    []string        `json:"access_users,omitempty"`
+	AccessGroups   []string        `json:"access_groups,omitempty"`
+	Sandbox        string          `json:"sandbox,omitempty"`
+	SandboxOptions *SandboxOptions `json:"sandbox_options,omitempty"`
+	Process        *ProcessConfig  `json:"process,omitempty"`
+	Static         *StaticConfig   `json:"static,omitempty"`
+	CGI            *CGIConfig      `json:"cgi,omitempty"`
+	Idle           *Duration       `json:"idle,omitempty"`
+	Watch          WatchConfig     `json:"watch"`
+	Cron           []CronConfig    `json:"cron"`
 }
 
 type ProcessConfig struct {
@@ -197,6 +202,9 @@ func loadManifest(dir string) (Manifest, error) {
 		return m, fmt.Errorf("access_users and access_groups require authenticated access")
 	}
 	if err := validateSandbox(m.Sandbox, runtime.GOOS); err != nil {
+		return m, err
+	}
+	if err := validateSandboxOptions(&m); err != nil {
 		return m, err
 	}
 	if m.AccessUsers, err = normalizePrincipals("access_users", m.AccessUsers); err != nil {
@@ -291,10 +299,10 @@ func loadManifest(dir string) (Manifest, error) {
 }
 
 func validateSandbox(sandbox, goos string) error {
-	if sandbox != "" && sandbox != "bubblewrap" {
-		return fmt.Errorf("sandbox must be bubblewrap or omitted")
+	if sandbox != "" && sandbox != "bubblewrap" && sandbox != hardenedSandbox {
+		return fmt.Errorf("sandbox must be bubblewrap, bubblewrap-hardened, or omitted")
 	}
-	if sandbox == "bubblewrap" && goos != "linux" {
+	if sandbox != "" && goos != "linux" {
 		return fmt.Errorf("sandbox bubblewrap is supported only on Linux")
 	}
 	return nil

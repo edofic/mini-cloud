@@ -19,3 +19,12 @@ On Linux, an app manifest can set `"sandbox": "bubblewrap"`. All of that app's p
 This “containers lite” preset reduces accidental or compromised writes outside the app directory and limits process visibility. It does not hide host files from the app, isolate the network, filter system calls, limit CPU or memory, create a separate service identity, or prevent apps from affecting each other through shared resources. App-directory symlinks into the host remain subject to the target's read-only mount. Continue to treat every manifest author as trusted; use separate Unix users, cgroups, firewall policy, or a full container/VM boundary for untrusted or mutually distrusting workloads.
 
 The gateway invokes `bwrap` from its `PATH`. If it is missing or the kernel/service policy prohibits unprivileged user namespaces, sandboxed commands fail to start while unsandboxed apps continue to work. Keep bubblewrap patched through the host package manager. The NixOS module and project container image include it by default.
+
+## Hardened sandbox
+
+The opt-in `bubblewrap-hardened` profile hides host files, makes app code read-only,
+restricts writable directories, isolates networking and filters HTTP(S) egress.
+It also uses Unix backend sockets with safe pinned connections. See
+[Hardened Bubblewrap](sandboxing.md) for policy, default-deny networking, deployment
+trust and remaining shared-kernel/resource limitations. Public authentication is
+still an ingress responsibility, independent of manifest `access`.

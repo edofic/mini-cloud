@@ -13,6 +13,7 @@ import (
 // All children are registered before they become visible to shutdown. Wait is
 // paired exactly once with a successful start, including failed readiness.
 func (g *Gateway) startChild(ctx context.Context, cmd *exec.Cmd) error {
+	defer closeChildFiles(cmd)
 	g.childMu.Lock()
 	defer g.childMu.Unlock()
 	if g.closing {
@@ -103,4 +104,11 @@ func appCommand(appDir, work string, args []string, sandbox string) *exec.Cmd {
 	cmd := exec.Command(path, args[1:]...)
 	cmd.Dir = workDir
 	return cmd
+}
+
+func closeChildFiles(cmd *exec.Cmd) {
+	for _, file := range cmd.ExtraFiles {
+		file.Close()
+	}
+	cmd.ExtraFiles = nil
 }

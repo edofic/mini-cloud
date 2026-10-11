@@ -1,0 +1,1 @@
+This stdlib-only process example supports the hardened Unix listener. Copy the directory under your apps_dir and configure a Go runtime closure as described in ../../docs/sandboxing.md. It needs no egress permissions. It is separate from the portable default examples because this profile requires Linux, Bubblewrap and a configured runtime closure.

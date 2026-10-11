@@ -144,6 +144,7 @@ func within(root, path string) bool {
 func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig, sandbox string) {
 	a.mu.Lock()
 	sem := a.cgiSem
+	opts := a.manifest.SandboxOptions
 	a.mu.Unlock()
 	select {
 	case sem <- struct{}{}:
@@ -156,13 +157,26 @@ func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig, san
 	ctx, cancel := context.WithTimeout(requestCtx, c.Timeout.Duration)
 	defer cancel()
 	extra := map[string]string{"APP_NAME": a.name}
-	env, err := buildEnv(a.dir, c.WorkingDirectory, c.EnvironmentFiles, c.Environment, extra)
+	env, err := buildEnv(a.dir, c.WorkingDirectory, c.EnvironmentFiles, c.Environment, extra, sandbox != hardenedSandbox)
 	if err != nil {
 		http.Error(w, "CGI environment error", 500)
 		return
 	}
 	args := interpolate(c.Command, env)
-	cmd := appCommand(a.dir, c.WorkingDirectory, args, sandbox)
+	runtimeDir := ""
+	if sandbox == hardenedSandbox {
+		runtimeDir, err = a.gw.sandboxRuntime(a.name, opts)
+		if err != nil {
+			http.Error(w, "CGI sandbox unavailable", 500)
+			return
+		}
+	}
+	cmd, err := a.gw.sandboxCommand(a.dir, c.WorkingDirectory, args, sandbox, opts, runtimeDir, env)
+	if err != nil {
+		http.Error(w, "CGI sandbox unavailable", 500)
+		return
+	}
+	defer closeChildFiles(cmd)
 	cmd.Stdin = r.Body
 	env["GATEWAY_INTERFACE"] = "CGI/1.1"
 	env["SERVER_PROTOCOL"] = r.Proto

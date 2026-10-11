@@ -21,16 +21,20 @@ import (
 )
 
 type Gateway struct {
-	cfg        Config
-	mu         sync.RWMutex
-	apps       map[string]*App
-	hosts      map[string]*App
-	ports      map[int]string
-	ctx        context.Context
-	childMu    sync.Mutex
-	children   map[*exec.Cmd]func() bool
-	childrenWG sync.WaitGroup
-	closing    bool
+	cfg             Config
+	mu              sync.RWMutex
+	apps            map[string]*App
+	hosts           map[string]*App
+	ports           map[int]string
+	ctx             context.Context
+	childMu         sync.Mutex
+	children        map[*exec.Cmd]func() bool
+	childrenWG      sync.WaitGroup
+	closing         bool
+	sandboxMu       sync.Mutex
+	sandboxRoot     string
+	sandboxPolicies map[string]*egressPolicy
+	egressSlots     chan struct{}
 }
 
 type App struct {
@@ -79,6 +83,11 @@ func NewGateway(cfg Config) *Gateway {
 func (g *Gateway) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer func() {
+		if g.sandboxRoot != "" {
+			os.RemoveAll(g.sandboxRoot)
+		}
+	}()
 	g.ctx = ctx
 	watcher, err := newAppWatcher(g.cfg.AppsDir)
 	if err != nil {
@@ -489,6 +498,7 @@ func (a *App) start() {
 	}
 	pc := *a.manifest.Process
 	sandbox := a.manifest.Sandbox
+	opts := a.manifest.SandboxOptions
 	port := a.port
 	ctx, cancel := context.WithTimeout(a.gw.ctx, pc.StartupTimeout.Duration)
 	a.startCancel = cancel
@@ -501,13 +511,29 @@ func (a *App) start() {
 		return
 	}
 	_ = probe.Close()
-	env, err := buildEnv(a.dir, pc.WorkingDirectory, pc.EnvironmentFiles, pc.Environment, map[string]string{"PORT": strconv.Itoa(port), "LISTEN_ADDRESS": "127.0.0.1:" + strconv.Itoa(port), "APP_NAME": a.name})
+	runtimeDir := ""
+	extra := map[string]string{"PORT": strconv.Itoa(port), "LISTEN_ADDRESS": "127.0.0.1:" + strconv.Itoa(port), "APP_NAME": a.name}
+	if sandbox == hardenedSandbox {
+		runtimeDir, err = a.gw.sandboxRuntime(a.name, opts)
+		if err != nil {
+			a.startFailed(err)
+			return
+		}
+		os.Remove(filepath.Join(runtimeDir, "backend", "app.sock"))
+		extra["LISTEN_NETWORK"] = "unix"
+		extra["LISTEN_ADDRESS"] = "/run/mini-cloud/backend/app.sock"
+	}
+	env, err := buildEnv(a.dir, pc.WorkingDirectory, pc.EnvironmentFiles, pc.Environment, extra, sandbox != hardenedSandbox)
 	if err != nil {
 		a.startFailed(err)
 		return
 	}
-	cmd := appCommand(a.dir, pc.WorkingDirectory, interpolate(pc.Command, env), sandbox)
-	cmd.Env = envList(env)
+	cmd, err := a.gw.sandboxCommand(a.dir, pc.WorkingDirectory, interpolate(pc.Command, env), sandbox, opts, runtimeDir, env)
+	if err != nil {
+		a.startFailed(err)
+		return
+	}
+	defer closeChildFiles(cmd)
 	cmd.Stdout = &logWriter{prefix: "app=" + a.name + " stream=stdout "}
 	cmd.Stderr = &logWriter{prefix: "app=" + a.name + " stream=stderr "}
 	a.mu.Lock()
@@ -525,7 +551,11 @@ func (a *App) start() {
 	a.cmd = cmd
 	a.mu.Unlock()
 	go a.waitProcess(cmd, pc)
-	err = waitReady(ctx, port, pc.Readiness)
+	if sandbox == hardenedSandbox {
+		err = waitReadyUnix(ctx, filepath.Join(runtimeDir, "backend", "app.sock"), pc.Readiness)
+	} else {
+		err = waitReady(ctx, port, pc.Readiness)
+	}
 	a.mu.Lock()
 	if a.cmd != cmd || a.state != "starting" {
 		a.mu.Unlock()
@@ -719,15 +749,34 @@ func waitReady(ctx context.Context, port int, r ReadinessConfig) error {
 	}
 }
 
-func buildEnv(appDir, work string, files []string, values, extra map[string]string) (map[string]string, error) {
+func buildEnv(appDir, work string, files []string, values, extra map[string]string, inherit ...bool) (map[string]string, error) {
 	out := map[string]string{}
-	for _, x := range os.Environ() {
-		if i := strings.IndexByte(x, '='); i > 0 {
-			out[x[:i]] = x[i+1:]
+	if len(inherit) == 0 || inherit[0] {
+		for _, x := range os.Environ() {
+			if i := strings.IndexByte(x, '='); i > 0 {
+				out[x[:i]] = x[i+1:]
+			}
 		}
+	} else {
+		out = hardenedEnv(appDir)
+	}
+	var root *os.Root
+	if len(inherit) != 0 && !inherit[0] && len(files) != 0 {
+		var err error
+		root, err = os.OpenRoot(appDir)
+		if err != nil {
+			return nil, err
+		}
+		defer root.Close()
 	}
 	for _, f := range files {
-		b, err := os.ReadFile(resolveWithin(appDir, f))
+		var b []byte
+		var err error
+		if root != nil {
+			b, err = root.ReadFile(f)
+		} else {
+			b, err = os.ReadFile(resolveWithin(appDir, f))
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,6 @@
 # mini-cloud
 
-mini-cloud is a small gateway for running mutable applications on one Linux or macOS machine. Put an application in a directory, edit it in place, and reach it through a hostname. HTTP processes start on demand and stop when idle; static files and CGI are also supported. On Linux, command-based apps can opt into a bubblewrap “containers lite” sandbox.
+mini-cloud is a small gateway for running mutable applications on one Linux or macOS machine. Put an application in a directory, edit it in place, and reach it through a hostname. HTTP processes start on demand and stop when idle; static files and CGI are also supported. On Linux, command-based apps can opt into compatible legacy Bubblewrap or [Hardened Bubblewrap](docs/sandboxing.md) with restricted files and HTTP(S) egress.
 
 Each application directory contains a `mini-cloud.json` manifest. mini-cloud discovers it, serves static files or CGI, or starts an HTTP process on the first request. It watches the directory, drains requests before restarting changed processes, runs manifest cron jobs, and exposes a small app index and admin view.
 
@@ -32,7 +32,7 @@ Edit `examples/apps/hello/server.py` or `examples/apps/hello/.env` and request i
 
 The gateway watches immediate child directories of `apps_dir`. A process app receives a stable loopback port and `PORT`/`LISTEN_ADDRESS`; it starts on demand and stops after its idle timeout. CGI starts once per request. Static files are read from disk on every request. Invalid manifests leave the last valid configuration active and appear in the admin view.
 
-The gateway is designed for one trusted Unix user. Put it behind a TLS/authentication proxy such as Caddy when serving protected or public applications. Its optional bubblewrap preset limits process visibility and writes but is not a confidentiality, resource, network, or tenant-isolation boundary. It does not provide full containers, builds, releases, rollback, backups, DNS, or distributed scheduling.
+The gateway is designed for one trusted Unix user. Put it behind a TLS/authentication proxy such as Caddy when serving protected or public applications. The legacy bubblewrap preset limits process visibility and writes; the hardened profile also restricts readable files and network access. Both share the host kernel and UID and leave CPU, memory, process and disk quotas to the deployment. It does not provide full containers, builds, releases, rollback, backups, DNS, or distributed scheduling.
 
 ## Development
 
