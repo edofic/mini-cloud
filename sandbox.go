@@ -61,6 +61,20 @@ func validateSandboxOptions(m *Manifest) error {
 	return nil
 }
 
+// Only this app's configured public aliases select its public verifier. Other
+// browser hosts retain the private verifier; this is not general host routing.
+func (g *Gateway) sandboxVerificationURLs(name string) map[string]string {
+	urls := map[string]string{}
+	if p := g.cfg.PublicIngress; p != nil && p.VerifyURL != "" {
+		for host, app := range p.Hosts {
+			if app == name {
+				urls[host] = p.VerifyURL
+			}
+		}
+	}
+	return urls
+}
+
 func (g *Gateway) sandboxRuntime(name string, opts *SandboxOptions) (string, error) {
 	g.sandboxMu.Lock()
 	defer g.sandboxMu.Unlock()
@@ -79,7 +93,7 @@ func (g *Gateway) sandboxRuntime(name string, opts *SandboxOptions) (string, err
 		g.sandboxPolicies = map[string]*egressPolicy{}
 	}
 	if policy := g.sandboxPolicies[name]; policy != nil {
-		policy.set(opts, g.cfg.Auth.VerifyURL)
+		policy.set(opts, g.cfg.Auth.VerifyURL, g.sandboxVerificationURLs(name))
 		return dir, nil
 	}
 	listener, err := net.Listen("unix", filepath.Join(dir, "egress.sock"))
@@ -91,7 +105,7 @@ func (g *Gateway) sandboxRuntime(name string, opts *SandboxOptions) (string, err
 		return "", err
 	}
 	policy := &egressPolicy{}
-	policy.set(opts, g.cfg.Auth.VerifyURL)
+	policy.set(opts, g.cfg.Auth.VerifyURL, g.sandboxVerificationURLs(name))
 	g.sandboxPolicies[name] = policy
 	limit := 32
 	if opts != nil && opts.Network.MaxConnections > 0 {

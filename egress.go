@@ -16,16 +16,18 @@ import (
 // This proxy lives outside app namespaces. It resolves and pins each destination
 // itself, so clients cannot bypass private-address checks through DNS rebinding.
 type egressPolicy struct {
-	mu        sync.RWMutex
-	hosts     map[string]bool
-	verifyURL string
+	mu         sync.RWMutex
+	hosts      map[string]bool
+	verifyURL  string
+	verifyURLs map[string]string
 }
 
-func (p *egressPolicy) set(opts *SandboxOptions, verifyURL string) {
+func (p *egressPolicy) set(opts *SandboxOptions, verifyURL string, verifyURLs map[string]string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.hosts = map[string]bool{}
 	p.verifyURL = ""
+	p.verifyURLs = nil
 	if opts == nil {
 		return
 	}
@@ -34,6 +36,10 @@ func (p *egressPolicy) set(opts *SandboxOptions, verifyURL string) {
 	}
 	if opts.Network.ForwardAuth {
 		p.verifyURL = verifyURL
+		p.verifyURLs = make(map[string]string, len(verifyURLs))
+		for host, endpoint := range verifyURLs {
+			p.verifyURLs[host] = endpoint
+		}
 	}
 }
 
@@ -164,6 +170,9 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 		if r.URL.Hostname() == "auth.mini-cloud.internal" {
 			policy.mu.RLock()
 			verifyURL := policy.verifyURL
+			if endpoint := policy.verifyURLs[stripPort(r.Header.Get("X-Forwarded-Host"))]; endpoint != "" {
+				verifyURL = endpoint
+			}
 			policy.mu.RUnlock()
 			if verifyURL == "" || r.Method != "GET" || r.URL.Path != "/verify" || r.URL.RawQuery != "" || r.URL.Port() != "" {
 				http.Error(w, "authentication endpoint not permitted", 403)

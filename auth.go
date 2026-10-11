@@ -9,6 +9,9 @@ import (
 
 func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) bool {
 	cfg := g.cfg.Auth
+	if isPublicIngress(r.Context()) && g.cfg.PublicIngress != nil && g.cfg.PublicIngress.VerifyURL != "" {
+		cfg.VerifyURL = g.cfg.PublicIngress.VerifyURL
+	}
 	if cfg.IdentityHeader == "" {
 		return true
 	}

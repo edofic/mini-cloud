@@ -19,6 +19,8 @@ map and forced verifier authentication, while the ordinary private listener
 retains its index, admin and manifest access behavior. Both share the app table,
 lifecycle and databases. Public ingress permits only hardened process/CGI apps;
 hardened HTTP processes use per-app Unix sockets inside private network namespaces.
+An optional independent public verifier keeps public authentication separate;
+sandbox verification selects it only for that app's configured public aliases.
 
 Application directories are watched recursively using native filesystem notifications: inotify on Linux and kqueue on macOS. The small `fsnotify` dependency provides one maintained interface for both platform-specific APIs. Notifications are briefly debounced before the gateway reconciles directory metadata and manifests, so multi-file and atomic editor saves normally produce one lifecycle change. Newly created directories are added to the recursive watch set during reconciliation.
 

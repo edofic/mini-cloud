@@ -9,6 +9,7 @@
   },
   "public_ingress": {
     "socket_path": "/run/mini-cloud-public/apps.sock",
+    "verify_url": "http://127.0.0.1:9092/api/authz/forward-auth",
     "hosts": {
       "shopping.apps.example.test": "shopping",
       "work-board.apps.example.test": "work-board"

@@ -96,6 +96,9 @@ private literals remain blocked even with `"*"`.
 `http://auth.mini-cloud.internal/verify` with no query is forwarded to the
 configured gateway `auth.verify_url`. This permits an app to verify browser
 sessions without reaching other host services or the rest of Authelia's API.
+When `public_ingress.verify_url` is configured, verification for this app's
+public aliases (identified by `X-Forwarded-Host`) uses that endpoint instead.
+Private hosts and other apps' aliases retain the private verifier.
 
 Egress connections, including idle connections and CONNECT tunnels, are capped
 at 32 per app (`max_connections`, configurable from 1 to 256) and 128 per gateway

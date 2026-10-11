@@ -102,6 +102,46 @@ func TestPublicIngressAcquisitionRejectsWeakenedPolicy(t *testing.T) {
 	}
 }
 
+func TestPublicIngressUsesSeparateVerifier(t *testing.T) {
+	makeVerifier := func(cookie string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Cookie") != cookie {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Remote-User", "verified")
+		}))
+	}
+	private := makeVerifier("private=valid")
+	defer private.Close()
+	public := makeVerifier("public=valid")
+	defer public.Close()
+	g := NewGateway(testConfig(t.TempDir()))
+	g.ctx = t.Context()
+	g.cfg.Auth = AuthConfig{VerifyURL: private.URL, IdentityHeader: "Remote-User", CopyHeaders: []string{"Remote-User"}}
+	g.cfg.PublicIngress = &PublicIngressConfig{VerifyURL: public.URL, Hosts: map[string]string{"shopping.test": "shopping"}}
+	g.apps["shopping"] = &App{gw: g, name: "shopping", manifest: Manifest{Sandbox: hardenedSandbox, Access: "public", Process: &ProcessConfig{}}, manualStop: true}
+	for _, cookie := range []string{"private=valid", "public=valid"} {
+		r := httptest.NewRequest("GET", "http://shopping.test/api/items", nil)
+		r.Header.Set("Cookie", cookie)
+		w := httptest.NewRecorder()
+		g.servePublicHTTP(w, r)
+		want := http.StatusUnauthorized
+		if cookie == "public=valid" {
+			want = http.StatusServiceUnavailable // Authenticated, reached stopped backend.
+		}
+		if w.Code != want {
+			t.Fatalf("public cookie %q: status %d, want %d", cookie, w.Code, want)
+		}
+		r = httptest.NewRequest("GET", "http://shopping.private.test/", nil)
+		r.Header.Set("Cookie", cookie)
+		r.Header.Set("X-Forwarded-Host", "shopping.test") // Cannot select the public verifier.
+		if got := g.authorize(httptest.NewRecorder(), r); got != (cookie == "private=valid") {
+			t.Fatalf("private cookie %q: authorized %v", cookie, got)
+		}
+	}
+}
+
 func TestPublicIngressSocketDoesNotReplaceFilesOrActiveListeners(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "public.sock")
 	if err := os.WriteFile(path, []byte("preserve"), 0600); err != nil {

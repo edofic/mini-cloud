@@ -39,6 +39,8 @@ maps selected public hostnames to existing hardened apps and verifies every
 request. It keeps the private index and admin separate and rejects identity
 headers supplied by the public proxy. TLS and the login portal stay with that
 proxy; public aliases share the same app instance and data.
+An optional public verifier URL keeps public Authelia sessions separate while
+apps continue to verify browser sessions through the bounded sandbox alias.
 
 ## Development
 

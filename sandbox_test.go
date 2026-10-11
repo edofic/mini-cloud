@@ -114,7 +114,7 @@ func TestEgressBlocksPrivateAndSpecialNetworks(t *testing.T) {
 
 func TestEgressExactHostPolicyAndNoDirectAuthTunnel(t *testing.T) {
 	p := &egressPolicy{}
-	p.set(&SandboxOptions{Network: SandboxNetwork{AllowHosts: []string{"api.openai.com"}, ForwardAuth: true}}, "http://127.0.0.1:9091/api/authz/forward-auth")
+	p.set(&SandboxOptions{Network: SandboxNetwork{AllowHosts: []string{"api.openai.com"}, ForwardAuth: true}}, "http://127.0.0.1:9091/api/authz/forward-auth", nil)
 	if !p.allowed("api.openai.com") || p.allowed("other.openai.com") || p.allowed("api.openai.com.attacker.test") {
 		t.Fatal("host allowlist is not exact")
 	}
@@ -207,7 +207,7 @@ func TestEgressAuthAliasOnlyForwardsVerification(t *testing.T) {
 	}))
 	defer upstream.Close()
 	p := &egressPolicy{}
-	p.set(&SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}, upstream.URL+"/api/authz/forward-auth")
+	p.set(&SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}, upstream.URL+"/api/authz/forward-auth", nil)
 	r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal/verify", nil)
 	r.Header.Set("Cookie", "session=test")
 	w := httptest.NewRecorder()
@@ -239,6 +239,43 @@ func TestHardenedEnvironmentFilesStayInsideApp(t *testing.T) {
 	env, err := buildEnv(app, ".", []string{"local.env"}, nil, nil, false)
 	if err != nil || env["DECLARED"] != "ok" {
 		t.Fatalf("app environment file: %v", err)
+	}
+}
+
+func TestEgressAuthAliasSelectsAppScopedPublicVerifier(t *testing.T) {
+	makeVerifier := func(identity string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/verify" {
+				t.Error("verification escaped configured path")
+			}
+			w.Header().Set("Remote-User", identity)
+		}))
+	}
+	private := makeVerifier("private")
+	defer private.Close()
+	public := makeVerifier("public")
+	defer public.Close()
+	g := NewGateway(testConfig(t.TempDir()))
+	g.cfg.PublicIngress = &PublicIngressConfig{VerifyURL: public.URL + "/verify", Hosts: map[string]string{"shopping.test": "shopping", "other.test": "other"}}
+	p := &egressPolicy{}
+	opts := &SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}
+	p.set(opts, private.URL+"/verify", g.sandboxVerificationURLs("shopping"))
+	for host, want := range map[string]string{"shopping.test": "public", "SHOPPING.test:443": "public", "shopping.private.test": "private", "other.test": "private", "": "private"} {
+		r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal/verify", nil)
+		r.Header.Set("X-Forwarded-Host", host)
+		w := httptest.NewRecorder()
+		newEgressServer(p).Handler.ServeHTTP(w, r)
+		if w.Code != 200 || w.Header().Get("Remote-User") != want {
+			t.Fatalf("host %q: status %d identity %q, want %q", host, w.Code, w.Header().Get("Remote-User"), want)
+		}
+	}
+	p.set(nil, private.URL+"/verify", g.sandboxVerificationURLs("shopping"))
+	r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal/verify", nil)
+	r.Header.Set("X-Forwarded-Host", "shopping.test")
+	w := httptest.NewRecorder()
+	newEgressServer(p).Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatal("disabled forward_auth retained public verifier access")
 	}
 }
 

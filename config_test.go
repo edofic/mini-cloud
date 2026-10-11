@@ -97,6 +97,7 @@ func TestRejectInvalidGatewaySettings(t *testing.T) {
 func TestPublicIngressConfiguration(t *testing.T) {
 	base := `"apps_dir":".","auth":{"verify_url":"http://127.0.0.1:9091/verify"},`
 	for _, setting := range []string{
+		`"public_ingress":{"socket_path":"/run/public.sock","verify_url":"file:///tmp/auth","hosts":{"notes.public.test":"notes"}}`,
 		`"public_ingress":{"socket_path":"relative.sock","hosts":{"notes.public.test":"notes"}}`,
 		`"public_ingress":{"socket_path":"/run/public.sock","hosts":{}}`,
 		`"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"../notes"}}`,
@@ -114,12 +115,15 @@ func TestPublicIngressConfiguration(t *testing.T) {
 		}
 	}
 	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{`+base+`"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"notes"}}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{`+base+`"public_ingress":{"socket_path":"/run/public.sock","verify_url":"http://127.0.0.1:9092/verify","hosts":{"notes.public.test":"notes"}}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := loadConfig(path)
+	cfg, err := loadConfig(path)
 	if runtime.GOOS == "linux" && err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "linux" && cfg.PublicIngress.VerifyURL != "http://127.0.0.1:9092/verify" {
+		t.Fatal("public verifier was not retained")
 	}
 	if runtime.GOOS != "linux" && err == nil {
 		t.Fatal("accepted Linux-only public ingress")

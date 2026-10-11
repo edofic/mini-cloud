@@ -47,6 +47,7 @@ type Config struct {
 type PublicIngressConfig struct {
 	SocketPath string            `json:"socket_path"`
 	Hosts      map[string]string `json:"hosts"`
+	VerifyURL  string            `json:"verify_url,omitempty"`
 }
 
 type PortRange struct {
@@ -105,6 +106,12 @@ func loadConfig(path string) (Config, error) {
 		}
 	}
 	if p := c.PublicIngress; p != nil {
+		if p.VerifyURL != "" {
+			u, err := url.Parse(p.VerifyURL)
+			if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+				return c, fmt.Errorf("public_ingress.verify_url must be an HTTP(S) URL")
+			}
+		}
 		if runtime.GOOS != "linux" {
 			return c, fmt.Errorf("public_ingress requires Linux hardened sandboxes")
 		}

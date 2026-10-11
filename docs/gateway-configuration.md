@@ -82,6 +82,7 @@ index or admin host:
 {
   "public_ingress": {
     "socket_path": "/run/mini-cloud-public/apps.sock",
+    "verify_url": "http://127.0.0.1:9092/api/authz/forward-auth",
     "hosts": {
       "shopping.apps.example.test": "shopping",
       "work-board.apps.example.test": "work-board"
@@ -116,6 +117,16 @@ HTTPS. Forwarded client IPs still come from the trusted edge; do not use them
 for authentication bypass policies. These are defenses against a compromised
 edge forging identity or selecting other apps, not protection from that edge
 reading valid browser cookies, stealing sessions or modifying app traffic.
+
+`public_ingress.verify_url` optionally selects a separate HTTP(S) verifier for
+public requests; it defaults to `auth.verify_url`. This supports a public
+Authelia instance with independent sessions, storage and secrets. Private
+requests always use `auth.verify_url`, regardless of forwarded host headers.
+An app with `sandbox_options.network.forward_auth` also selects the public
+verifier when its verification request's `X-Forwarded-Host` matches one of that
+app's configured public aliases. Other hosts use the private verifier. Both
+verifiers must return the same configured identity/group header names. The edge
+must use the public verifier too; cookie names and session stores should differ.
 
 The edge must provide HTTPS and trustworthy client IP metadata, strip incoming
 identity headers, allowlist the same hosts and require Authelia on every app
