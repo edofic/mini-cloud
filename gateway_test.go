@@ -162,6 +162,14 @@ func TestWatchDetectsRecursiveEditsAndNewApps(t *testing.T) {
 		defer g.mu.RUnlock()
 		return g.apps["new"] != nil
 	}, "new application was not discovered")
+	waitFor(t, func() bool {
+		body, err := os.ReadFile(filepath.Join(newDir, "AGENTS.md"))
+		if err != nil || !strings.Contains(string(body), "../AGENTS.md") {
+			return false
+		}
+		_, err = os.Readlink(filepath.Join(newDir, ".agents", "skills", "mini-cloud-app"))
+		return err == nil
+	}, "new application did not receive agent guidance")
 }
 
 func waitFor(t *testing.T, condition func() bool, message string) {

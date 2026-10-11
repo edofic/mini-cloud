@@ -35,6 +35,13 @@ while ! curl -fsS -H 'Host: admin.apps.test' "http://127.0.0.1:$test_port/" >/de
   sleep 0.1
 done
 
+for app in hello page cgi; do
+  test -f "$tmp_dir/apps/$app/AGENTS.md"
+  test -L "$tmp_dir/apps/$app/.agents/skills/mini-cloud-app"
+  cmp "$tmp_dir/apps/.agents/skills/mini-cloud-app/SKILL.md" \
+    "$tmp_dir/apps/$app/.agents/skills/mini-cloud-app/SKILL.md"
+done
+
 curl -fsS -H 'Host: hello.apps.test' "http://127.0.0.1:$test_port/" | grep -q 'hello from the process example'
 curl -fsS -H 'Host: page.apps.test' "http://127.0.0.1:$test_port/" | grep -q 'Static files are live'
 curl -fsS -H 'Host: cgi.apps.test' "http://127.0.0.1:$test_port/example" | grep -q 'CGI process handled GET /example'

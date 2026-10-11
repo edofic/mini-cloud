@@ -11,7 +11,7 @@ go build -o mini-cloud .
 
 The configuration needs an `apps_dir`; see [gateway configuration](gateway-configuration.md) for defaults and authentication. Each immediate directory below it becomes an app when it contains `mini-cloud.json`. The directory itself is the app's mutable source of truth. mini-cloud does not copy, build, version, deploy, or roll back it.
 
-At startup the gateway writes `AGENTS.md` and `.agents/skills/mini-cloud-app` below `apps_dir`. These generated files describe the configured hosts and paths to coding agents. Edit the templates in the source tree, not generated files. A failed managed-file write prevents startup.
+At startup the gateway writes `AGENTS.md` and `.agents/skills/mini-cloud-app` below `apps_dir`. These generated files describe the configured hosts and paths to coding agents. Discovery also adds a managed section to each app's `AGENTS.md` (and existing `AGENTS.override.md`) and a symlink to the shared skill, so you can open an app folder directly. App-specific instructions outside the section are preserved. Edit platform templates in the source tree. A failed apps-root managed-file write prevents startup; per-app conflicts appear in admin without blocking app serving. See [automatic app guidance](gateway-configuration.md#automatic-app-guidance).
 
 ## First application
 
@@ -39,7 +39,7 @@ Put `index.html` in `notes/public/`, then request `notes.<base_domain>`. With th
 curl -H 'Host: notes.apps.test' http://127.0.0.1:9080/
 ```
 
-Allow one scan interval for discovery. Changes to static files are visible on the next request. Followed symlinks must remain inside the static root.
+Allow one scan interval for discovery. The gateway also creates `notes/AGENTS.md` and `notes/.agents/skills/mini-cloud-app`; you can open `notes` directly in your agent. Changes to static files are visible on the next request. Followed symlinks must remain inside the static root.
 
 For an HTTP process, use an argument array and bind the supplied port:
 
@@ -63,7 +63,7 @@ Public apps skip verification. Authenticated apps use the configured identity he
 
 App links in the index and admin page inherit the browser’s HTTP or HTTPS scheme and preserve the port in the request’s `Host` header. For local examples, open `http://apps.test:9080/`; links stay on HTTP port `9080`. A reverse proxy must preserve the original public `Host` header, including its port when present. Apps linked from these pages must be reachable on that same scheme and port.
 
-The admin page and `/api/apps` show state, port, active requests, restart information, cron results, and manifest/process errors. They do not control processes or deploy files.
+The admin page and `/api/apps` show state, port, active requests, restart information, cron results, manifest/process errors, and agent-guidance errors. They do not control processes or deploy files.
 
 ## CGI and cron
 

@@ -4,6 +4,8 @@ This directory (`{{.AppsDir}}`) is the live application root for **mini-cloud**,
 
 Files here are live and mutable. Mini-cloud watches application directories: static and CGI changes apply on the next request, while changes to a running process app cause it to drain in-flight requests and restart. Do not assume releases, builds, Git operations, migrations, or rollback are managed by the platform; those remain the application's responsibility.
 
+You can open an individual application directory directly. Mini-cloud automatically maintains a marked section in its `AGENTS.md` (and in `AGENTS.override.md` when present) referring to this guidance, plus a `.agents/skills/mini-cloud-app` symlink to the shared skill. Keep application-specific instructions outside the `<!-- mini-cloud:begin -->` / `<!-- mini-cloud:end -->` section. These instruction files and `.agents` are excluded from process restart detection. Existing conflicting files or links are preserved and reported in the admin UI.
+
 ## Version control
 
 Every real application in this directory must be its own Git repository. The small `cgi`, `hello`, and `page` applications are mini-cloud demos and are exempt from this requirement.

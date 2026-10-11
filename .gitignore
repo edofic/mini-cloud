@@ -5,3 +5,6 @@
 /*.log
 /examples/apps/AGENTS.md
 /examples/apps/.agents/
+/examples/apps/*/AGENTS.md
+/examples/apps/*/AGENTS.override.md
+/examples/apps/*/.agents/

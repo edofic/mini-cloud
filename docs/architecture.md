@@ -22,7 +22,7 @@ hardened HTTP processes use per-app Unix sockets inside private network namespac
 An optional independent public verifier keeps public authentication separate;
 sandbox verification selects it only for that app's configured public aliases.
 
-Application directories are watched recursively using native filesystem notifications: inotify on Linux and kqueue on macOS. The small `fsnotify` dependency provides one maintained interface for both platform-specific APIs. Notifications are briefly debounced before the gateway reconciles directory metadata and manifests, so multi-file and atomic editor saves normally produce one lifecycle change. Newly created directories are added to the recursive watch set during reconciliation.
+Application directories are watched recursively using native filesystem notifications: inotify on Linux and kqueue on macOS. The small `fsnotify` dependency provides one maintained interface for both platform-specific APIs. Notifications are briefly debounced before the gateway reconciles directory metadata and manifests, so multi-file and atomic editor saves normally produce one lifecycle change. Newly created directories are added to the recursive watch set during reconciliation. Discovery also maintains a marked instruction section and shared skill symlink in each app, preserving app-owned instructions. Guidance paths are excluded from process fingerprints; per-app guidance failures are reported separately from manifest errors and do not affect the active runtime. See [automatic app guidance](gateway-configuration.md#automatic-app-guidance).
 
 ## Runtime types
 

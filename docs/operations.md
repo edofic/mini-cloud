@@ -8,7 +8,9 @@ Polling compares metadata, not file contents, so an edit that preserves size, mo
 
 Invalid manifest edits keep the last valid runtime configuration. This does not restore changed source files or data. A new app with an invalid manifest appears in admin but has no route until a valid configuration is accepted. Fix the file and a later scan applies it.
 
-Removing the app directory or its manifest unregisters the app, stops its process, and cancels its cron invocations. Use an atomic file replacement when saving manifests to avoid a temporary absence being treated as removal.
+Agent instruction files (`AGENTS.md` and `AGENTS.override.md`), `.agents`, and mini-cloud's temporary managed files are always excluded from restart detection. The gateway reconciles each app's managed instruction section and shared skill link during discovery. Conflicts and write failures appear as agent-guidance errors in admin while the app continues serving. See [automatic app guidance](gateway-configuration.md#automatic-app-guidance).
+
+Removing the app directory or its manifest unregisters the app, stops its process, and cancels its cron invocations. Generated guidance is left in place. Use an atomic file replacement when saving manifests to avoid a temporary absence being treated as removal.
 
 ## Failure recovery
 
@@ -26,7 +28,7 @@ journalctl -u mini-cloud.service -f
 
 Entries include fields such as `app=hello`, `job=cleanup`, `stream=stderr`, and `event=ready`. The gateway does not store or query historical logs.
 
-The configured admin host shows runtime type, access, sandbox mode, state, port, active requests, restart count, cron results, process errors, and manifest errors. `/api/apps` returns the same snapshot as JSON. The page is intentionally observational: it has no deploy or remote process-control actions.
+The configured admin host shows runtime type, access, sandbox mode, state, port, active requests, restart count, cron results, process errors, manifest errors, and agent-guidance errors. `/api/apps` returns the same snapshot as JSON. The page is intentionally observational: it has no deploy or remote process-control actions.
 
 ## Shutdown
 

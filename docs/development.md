@@ -33,4 +33,4 @@ The smoke test copies examples to a temporary directory and removes it afterward
 MINI_CLOUD_TEST_PORT=19081 ./scripts/test-examples.sh
 ```
 
-When changing behavior or configuration, update the relevant documentation and example manifests together. Generated application guidance comes from [`templates/apps-root`](../templates/apps-root); edit those templates rather than generated files under an apps directory.
+When changing behavior or configuration, update the relevant documentation and example manifests together. Generated application guidance comes from [`templates/apps-root`](../templates/apps-root); edit those templates rather than generated files under an apps directory. The `app-AGENTS.md.tmpl` template supplies the marked section maintained inside each app's instruction files; text outside that section belongs to the app.

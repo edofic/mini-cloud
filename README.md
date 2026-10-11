@@ -4,7 +4,7 @@ mini-cloud is a small gateway for running mutable applications on one Linux or m
 
 Each application directory contains a `mini-cloud.json` manifest. mini-cloud discovers it, serves static files or CGI, or starts an HTTP process on the first request. It watches the directory, drains requests before restarting changed processes, runs manifest cron jobs, and exposes a small app index and admin view.
 
-When the gateway starts, it also installs generated `AGENTS.md` guidance and a `mini-cloud-app` skill in the applications directory. Agents can discover the local manifest format, URLs, paths, and project conventions without a separate setup step. The checked-in templates under [`templates/apps-root`](templates/apps-root) are authoritative.
+When the gateway starts, it installs generated `AGENTS.md` guidance and a `mini-cloud-app` skill in the applications directory. As apps are discovered, it maintains a marked section in each app's `AGENTS.md` and links the shared skill into that app. Open an individual app folder directly: agents can discover the local manifest format and platform conventions while app-specific instructions are preserved. The checked-in templates under [`templates/apps-root`](templates/apps-root) are authoritative; see [automatic app guidance](docs/gateway-configuration.md#automatic-app-guidance) for ownership and conflict handling.
 
 ## Quick start
 

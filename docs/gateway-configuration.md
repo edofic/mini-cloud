@@ -66,6 +66,19 @@ trusted gateway-wide deployment settings and require a restart. See
 [Hardened Bubblewrap](sandboxing.md) for fields, defaults, Nix closures and app
 requirements. The compatible legacy `bubblewrap` profile does not need them.
 
+## Automatic app guidance
+
+On every discovery scan, including startup and later filesystem notifications, each immediate directory containing `mini-cloud.json` receives:
+
+- An `AGENTS.md` section delimited by `<!-- mini-cloud:begin -->` and `<!-- mini-cloud:end -->`. The section tells agents to read `../AGENTS.md` and use the shared skill. An existing `AGENTS.override.md` receives the same section because Codex prefers it to `AGENTS.md`; mini-cloud never creates an override.
+- A relative symlink at `.agents/skills/mini-cloud-app` pointing to `../../../.agents/skills/mini-cloud-app`, the generated shared skill under `apps_dir`.
+
+You can start an agent directly in the app folder, even when the app is its own Git repository. App-specific instructions outside the marked section remain byte-for-byte intact, and existing instruction-file permissions are preserved. Missing files and links are recreated on the next scan; matching files and links are left untouched. Shared skill updates reach all app links without copying files into apps. Customize the shared guidance and the per-app section through the checked-in templates under `templates/apps-root`.
+
+Instruction files must be regular files, and `.agents` and `.agents/skills` must be real directories. A conflicting skill path, malformed or duplicated section markers, or a write failure is preserved and reported in logs and the app's admin errors (`GuidanceError` in `/api/apps`). Guidance errors do not prevent app serving or manifest updates, and scans retry setup after filesystem changes. Apps with invalid manifests also receive guidance for troubleshooting.
+
+`AGENTS.md`, `AGENTS.override.md`, `.agents`, and mini-cloud's temporary managed files are always excluded from process restart detection. Other instruction or skill locations are not managed. Removing an app or manifest does not delete generated guidance. App repositories may track their instruction files and the relative skill symlink; the shared skill's contents remain owned by mini-cloud.
+
 ## Authentication
 
 `auth.identity_header` is the trusted authenticated identity and `auth.groups_header` is the comma-separated group list used by manifest `access_groups`; they default to `Remote-User` and `Remote-Groups`. When the identity header is absent and `verify_url` is configured, mini-cloud forwards the request headers and original request metadata to that authorization endpoint. A successful response must return the identity header; fields listed in `copy_headers` are added to the application request. Include the configured identity header in `copy_headers`; a successful verifier response without a copied identity produces 502. Include the configured groups header when any manifest uses group restrictions. Authorization redirects and failures are returned to the client without being followed. Without either a trusted identity header on the request or `verify_url`, an authenticated app returns 401. A verified identity outside the manifest allow lists receives 403. An empty identity-header setting disables authentication and manifest principal checks for local development. When authentication is enabled and `admin_identity` is nonempty, the admin host requires that exact trusted or verifier-supplied identity.

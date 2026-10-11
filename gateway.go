@@ -49,6 +49,7 @@ type App struct {
 	manifest         Manifest
 	snapshot         string
 	configError      string
+	guidanceError    string
 	state            string
 	stateError       string
 	port             int
@@ -210,6 +211,7 @@ func (g *Gateway) scan() error {
 			continue
 		}
 		seen[name] = true
+		guidanceErr := generateAppManagedFiles(dir)
 		m, merr := loadManifest(dir)
 		snap, serr := snapshotDir(dir, m.Watch.Ignore)
 		if serr != nil && merr == nil {
@@ -222,6 +224,7 @@ func (g *Gateway) scan() error {
 			g.apps[name] = a
 		}
 		g.mu.Unlock()
+		a.setGuidanceError(guidanceErr)
 		if merr != nil {
 			a.setConfigError(merr)
 			continue
@@ -341,9 +344,23 @@ func (a *App) setConfigError(err error) {
 	log.Printf("app=%s config_error=%q", a.name, err)
 }
 
+func (a *App) setGuidanceError(err error) {
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	a.mu.Lock()
+	changed := a.guidanceError != message
+	a.guidanceError = message
+	a.mu.Unlock()
+	if changed && err != nil {
+		log.Printf("app=%s guidance_error=%q", a.name, err)
+	}
+}
+
 func snapshotDir(root string, ignores []string) (string, error) {
 	h := sha256.New()
-	defaults := []string{".git", ".hg", ".svn"}
+	defaults := []string{".git", ".hg", ".svn", "AGENTS.md", "AGENTS.override.md", ".agents", ".mini-cloud-managed-*"}
 	ignores = append(defaults, ignores...)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

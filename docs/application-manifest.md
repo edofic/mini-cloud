@@ -32,7 +32,7 @@ This is lightweight damage containment, not a confidentiality or multi-tenant bo
 
 For an authenticated app, `access_users` and `access_groups` optionally restrict access to the listed identities and groups. The lists are combined with OR semantics: the example permits user `alice` and every member of group `admin`. With neither list, any authenticated identity is accepted for backward compatibility. Principal matching is exact and case-sensitive. Public apps cannot specify either list. The app directory uses these same rules and omits apps the current identity cannot access.
 
-Watch patterns are relative to the app root and use shell-style path matching: `*` does not cross `/`, and `**` has no special recursive meaning. Matching directories are excluded recursively. Top-level `.git`, `.hg`, and `.svn` directories are always ignored. Manifest and `.env` changes otherwise restart a running process. Ignore databases, caches, and generated output to prevent restart loops. See [live editing limitations](operations.md#live-editing).
+Watch patterns are relative to the app root and use shell-style path matching: `*` does not cross `/`, and `**` has no special recursive meaning. Matching directories are excluded recursively. Top-level `.git`, `.hg`, and `.svn` directories are always ignored, as are `AGENTS.md`, `AGENTS.override.md`, `.agents`, and mini-cloud's temporary managed files. Agent-guidance changes do not restart processes and need no manifest ignore patterns. Manifest and `.env` changes otherwise restart a running process. Ignore databases, caches, and generated output to prevent restart loops. See [live editing limitations](operations.md#live-editing).
 
 ## Process
 

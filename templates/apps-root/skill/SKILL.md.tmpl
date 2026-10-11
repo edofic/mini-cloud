@@ -9,7 +9,7 @@ description: Create, configure, and troubleshoot mini-cloud applications and man
 
 1. Identify the application directory and inspect its existing `mini-cloud.json`, if present.
 2. Read [references/manifest.md](references/manifest.md) before creating or changing a manifest. Use only the sections relevant to the requested runtime or feature.
-3. Inspect the application's own repository status before editing. Preserve unrelated changes and follow the root `AGENTS.md` version-control rules.
+3. Inspect the application's own repository status before editing. Preserve unrelated changes and follow the apps-root guidance at `{{.AppsDir}}/AGENTS.md` together with the application's own instructions.
 4. Select exactly one runtime and keep the manifest aligned with how the application actually starts and serves traffic.
 5. Keep secrets and mutable runtime data out of version control and file watching. Add focused ignore rules rather than broad patterns.
 6. Validate the manifest as JSON, run the application's relevant tests, and verify runtime behavior proportionately to the change.
