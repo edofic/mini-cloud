@@ -4,7 +4,7 @@
 
 The scanner fingerprints path, size, modification time, and mode for every non-ignored file. A change to a running process triggers drain and restart. A stopped process stays stopped and consumes the changes on its next activation. Static and CGI files take effect on their next request. A long-lived WebSocket prevents a drain from completing until it closes.
 
-Polling compares metadata, not file contents, so an edit that preserves size, modification time, and mode may be missed. The scanner does not follow symlinks: changing a symlink is detected, but edits only to its target are not. Symlinked directories directly under `apps_dir` are not discovered as apps.
+The scanner compares metadata, not file contents, so an edit that preserves size, modification time, and mode may be missed. The scanner does not follow symlinks: changing a symlink is detected, but edits only to its target are not. Symlinked directories directly under `apps_dir` are not discovered as apps.
 
 Invalid manifest edits keep the last valid runtime configuration. This does not restore changed source files or data. A new app with an invalid manifest appears in admin but has no route until a valid configuration is accepted. Fix the file and a later scan applies it.
 

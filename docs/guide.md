@@ -39,7 +39,7 @@ Put `index.html` in `notes/public/`, then request `notes.<base_domain>`. With th
 curl -H 'Host: notes.apps.test' http://127.0.0.1:9080/
 ```
 
-Allow one scan interval for discovery. The gateway also creates `notes/AGENTS.md` and `notes/.agents/skills/mini-cloud-app`; you can open `notes` directly in your agent. Changes to static files are visible on the next request. Followed symlinks must remain inside the static root.
+Filesystem notifications trigger discovery after a brief debounce. The gateway also creates `notes/AGENTS.md` and `notes/.agents/skills/mini-cloud-app`; you can open `notes` directly in your agent. Changes to static files are visible on the next request. Followed symlinks must remain inside the static root.
 
 For an HTTP process, use an argument array and bind the supplied port:
 
