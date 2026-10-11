@@ -102,11 +102,27 @@ func (g *Gateway) Run(ctx context.Context) error {
 		_ = watcher.Close()
 		return err
 	}
+	listeners := []net.Listener{listener}
+	handlers := []http.Handler{g}
+	if cfg := g.cfg.PublicIngress; cfg != nil {
+		publicListener, err := listenPublicIngress(cfg.SocketPath)
+		if err != nil {
+			listener.Close()
+			_ = watcher.Close()
+			return fmt.Errorf("listen public ingress: %w", err)
+		}
+		listeners = append(listeners, publicListener)
+		handlers = append(handlers, http.HandlerFunc(g.servePublicHTTP))
+		log.Printf("mini-cloud public ingress on %s; hosts=%v", cfg.SocketPath, cfg.Hosts)
+	}
 	var workers sync.WaitGroup
 	workers.Add(2)
 	go func() { defer workers.Done(); g.watch(ctx, watcher) }()
 	go func() { defer workers.Done(); g.schedule(ctx) }()
-	server := &http.Server{Handler: g, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	servers := make([]*http.Server, len(listeners))
+	for i, handler := range handlers {
+		servers[i] = &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	}
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
@@ -117,16 +133,26 @@ func (g *Gateway) Run(ctx context.Context) error {
 		httpDone := make(chan struct{})
 		go func() {
 			defer close(httpDone)
-			if err := server.Shutdown(shutdownCtx); err != nil {
-				_ = server.Close()
+			var shutdowns sync.WaitGroup
+			for _, server := range servers {
+				shutdowns.Go(func() {
+					if err := server.Shutdown(shutdownCtx); err != nil {
+						_ = server.Close()
+					}
+				})
 			}
+			shutdowns.Wait()
 		}()
 		workers.Wait()
 		g.stopAll()
 		<-httpDone
 	}()
 	log.Printf("mini-cloud listening on %s; watching %s", g.cfg.Listen, g.cfg.AppsDir)
-	err = server.Serve(listener)
+	serveErrors := make(chan error, len(servers))
+	for i, server := range servers {
+		go func() { serveErrors <- server.Serve(listeners[i]) }()
+	}
+	err = <-serveErrors
 	cancel()
 	<-stopped
 	if err == http.ErrServerClosed {
@@ -386,6 +412,10 @@ func (a *App) acquire(ctx context.Context) (int, func(), error) {
 	attempted := false
 	for {
 		a.mu.Lock()
+		if isPublicIngress(ctx) && a.manifest.Sandbox != hardenedSandbox {
+			a.mu.Unlock()
+			return 0, nil, fmt.Errorf("public ingress sandbox policy changed")
+		}
 		if a.manualStop || a.gw.ctx.Err() != nil {
 			a.mu.Unlock()
 			return 0, nil, fmt.Errorf("application stopped")

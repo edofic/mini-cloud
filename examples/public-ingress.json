@@ -1,0 +1,20 @@
+{
+  "listen": "127.0.0.1:9080",
+  "apps_dir": "/var/lib/mini-cloud/apps",
+  "base_domain": "apps.private.example.test",
+  "index_host": "apps.private.example.test",
+  "admin_host": "admin.apps.private.example.test",
+  "auth": {
+    "verify_url": "http://127.0.0.1:9091/api/authz/forward-auth"
+  },
+  "public_ingress": {
+    "socket_path": "/run/mini-cloud-public/apps.sock",
+    "hosts": {
+      "shopping.apps.example.test": "shopping",
+      "work-board.apps.example.test": "work-board"
+    }
+  },
+  "sandbox": {
+    "runtime_paths_file": "/nix/store/EXAMPLE-runtime-closure/store-paths"
+  }
+}

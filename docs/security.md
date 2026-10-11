@@ -27,4 +27,18 @@ restricts writable directories, isolates networking and filters HTTP(S) egress.
 It also uses Unix backend sockets with safe pinned connections. See
 [Hardened Bubblewrap](sandboxing.md) for policy, default-deny networking, deployment
 trust and remaining shared-kernel/resource limitations. Public authentication is
-still an ingress responsibility, independent of manifest `access`.
+an ingress responsibility, independent of manifest `access`.
+
+## Constrained public listener
+
+The optional [public ingress socket](gateway-configuration.md#constrained-public-ingress)
+accepts only explicitly mapped hostnames and hardened process/CGI apps, and
+verifies every request with the configured authorization service. It strips
+edge identity headers instead of trusting them and keeps the full index/admin
+on the ordinary private listener. Provision its directory with limited proxy
+group access and share only that socket directory with an edge container.
+An exposed or compromised ordinary loopback bridge would bypass these checks.
+The edge still sees session cookies and application traffic, so its compromise
+can steal valid sessions. The login portal remains a public authentication
+surface. Neither listener turns trusted mutable manifests into multi-tenant
+deployment permissions.

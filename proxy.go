@@ -12,7 +12,7 @@ import (
 
 func (a *App) proxy(w http.ResponseWriter, r *http.Request, backend string) {
 	a.mu.Lock()
-	hardened := a.manifest.Sandbox == hardenedSandbox
+	hardened := isPublicIngress(r.Context()) || a.manifest.Sandbox == hardenedSandbox
 	a.mu.Unlock()
 	proxy := httputil.ReverseProxy{
 		Rewrite: func(p *httputil.ProxyRequest) {

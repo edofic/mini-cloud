@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -90,5 +91,37 @@ func TestRejectInvalidGatewaySettings(t *testing.T) {
 		if _, err := loadConfig(p); err == nil {
 			t.Fatalf("accepted %s", setting)
 		}
+	}
+}
+
+func TestPublicIngressConfiguration(t *testing.T) {
+	base := `"apps_dir":".","auth":{"verify_url":"http://127.0.0.1:9091/verify"},`
+	for _, setting := range []string{
+		`"public_ingress":{"socket_path":"relative.sock","hosts":{"notes.public.test":"notes"}}`,
+		`"public_ingress":{"socket_path":"/run/public.sock","hosts":{}}`,
+		`"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"../notes"}}`,
+		`"public_ingress":{"socket_path":"/run/public.sock","hosts":{"NOTES.public.test":"notes","notes.public.test":"notes"}}`,
+		`"auth":{"identity_header":"","verify_url":"http://localhost/verify"},"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"notes"}}`,
+		`"auth":{"verify_url":""},"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"notes"}}`,
+		`"auth":{"verify_url":"http://localhost/verify","copy_headers":[]},"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"notes"}}`,
+	} {
+		path := filepath.Join(t.TempDir(), "config.json")
+		if err := os.WriteFile(path, []byte(`{`+base+setting+`}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := loadConfig(path); err == nil {
+			t.Fatalf("accepted %s", setting)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{`+base+`"public_ingress":{"socket_path":"/run/public.sock","hosts":{"notes.public.test":"notes"}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadConfig(path)
+	if runtime.GOOS == "linux" && err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "linux" && err == nil {
+		t.Fatal("accepted Linux-only public ingress")
 	}
 }

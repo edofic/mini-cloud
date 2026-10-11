@@ -171,13 +171,6 @@ func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig, san
 			return
 		}
 	}
-	cmd, err := a.gw.sandboxCommand(a.dir, c.WorkingDirectory, args, sandbox, opts, runtimeDir, env)
-	if err != nil {
-		http.Error(w, "CGI sandbox unavailable", 500)
-		return
-	}
-	defer closeChildFiles(cmd)
-	cmd.Stdin = r.Body
 	env["GATEWAY_INTERFACE"] = "CGI/1.1"
 	env["SERVER_PROTOCOL"] = r.Proto
 	env["SERVER_SOFTWARE"] = "mini-cloud"
@@ -203,7 +196,15 @@ func (a *App) serveCGI(w http.ResponseWriter, r *http.Request, c *CGIConfig, san
 		key := "HTTP_" + strings.ReplaceAll(strings.ToUpper(k), "-", "_")
 		env[key] = strings.Join(v, ",")
 	}
-	cmd.Env = envList(env)
+	// Include CGI metadata inside the namespace without replacing the trusted
+	// host-side launcher environment prepared by sandboxCommand.
+	cmd, err := a.gw.sandboxCommand(a.dir, c.WorkingDirectory, args, sandbox, opts, runtimeDir, env)
+	if err != nil {
+		http.Error(w, "CGI sandbox unavailable", 500)
+		return
+	}
+	defer closeChildFiles(cmd)
+	cmd.Stdin = r.Body
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		http.Error(w, "CGI setup failed", 500)

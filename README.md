@@ -34,6 +34,12 @@ The gateway watches immediate child directories of `apps_dir`. A process app rec
 
 The gateway is designed for one trusted Unix user. Put it behind a TLS/authentication proxy such as Caddy when serving protected or public applications. The legacy bubblewrap preset limits process visibility and writes; the hardened profile also restricts readable files and network access. Both share the host kernel and UID and leave CPU, memory, process and disk quotas to the deployment. It does not provide full containers, builds, releases, rollback, backups, DNS, or distributed scheduling.
 
+An optional [constrained public ingress socket](docs/gateway-configuration.md#constrained-public-ingress)
+maps selected public hostnames to existing hardened apps and verifies every
+request. It keeps the private index and admin separate and rejects identity
+headers supplied by the public proxy. TLS and the login portal stay with that
+proxy; public aliases share the same app instance and data.
+
 ## Development
 
 Use the reproducible development shell and run the same checks as CI:

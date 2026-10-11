@@ -39,7 +39,43 @@ func TestMain(m *testing.M) {
 		json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel", "host_timezone_preserved": fmt.Sprint(utcOffset) == os.Getenv("EXPECTED_UTC_OFFSET")})
 		os.Exit(0)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "sandbox-cgi-probe" {
+		fmt.Print("Content-Type: text/plain\r\n\r\n")
+		fmt.Printf("%s|%s|%s", os.Getenv("REQUEST_METHOD"), os.Getenv("HTTP_REMOTE_USER"), os.Getenv("LD_TRACE_LOADED_OBJECTS"))
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
+}
+
+func TestHardenedPublicCGIMetadataAndLauncherEnvironment(t *testing.T) {
+	runtimeFile := os.Getenv("MINICLOUD_SANDBOX_TEST_RUNTIME")
+	if runtimeFile == "" {
+		t.Skip("set MINICLOUD_SANDBOX_TEST_RUNTIME for actual Bubblewrap CGI verification")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, "cgi")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(dir, manifestName), Manifest{Access: "public", Sandbox: hardenedSandbox, CGI: &CGIConfig{Command: []string{"/run/mini-cloud/runner", "sandbox-cgi-probe"}, Environment: map[string]string{"LD_TRACE_LOADED_OBJECTS": "1"}}})
+	verifier := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("Remote-User", "verified") }))
+	defer verifier.Close()
+	cfg := testConfig(root)
+	cfg.Sandbox.RuntimePathsFile = runtimeFile
+	cfg.PublicIngress = &PublicIngressConfig{Hosts: map[string]string{"cgi.test": "cgi"}}
+	cfg.Auth = AuthConfig{IdentityHeader: "Remote-User", VerifyURL: verifier.URL, CopyHeaders: []string{"Remote-User"}}
+	g := NewGateway(cfg)
+	ctx, cancel := context.WithCancel(t.Context())
+	g.ctx = ctx
+	defer func() { cancel(); g.stopAll(); os.RemoveAll(g.sandboxRoot) }()
+	if err := g.scan(); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	g.servePublicHTTP(w, httptest.NewRequest("POST", "https://cgi.test/api", strings.NewReader("payload")))
+	if w.Code != 200 || w.Body.String() != "POST|verified|1" {
+		t.Fatalf("CGI status=%d body=%q", w.Code, w.Body.String())
+	}
 }
 
 func TestHardenedEnvironmentDoesNotInheritSecrets(t *testing.T) {

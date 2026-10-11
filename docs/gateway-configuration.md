@@ -70,4 +70,54 @@ requirements. The compatible legacy `bubblewrap` profile does not need them.
 
 `auth.identity_header` is the trusted authenticated identity and `auth.groups_header` is the comma-separated group list used by manifest `access_groups`; they default to `Remote-User` and `Remote-Groups`. When the identity header is absent and `verify_url` is configured, mini-cloud forwards the request headers and original request metadata to that authorization endpoint. A successful response must return the identity header; fields listed in `copy_headers` are added to the application request. Include the configured identity header in `copy_headers`; a successful verifier response without a copied identity produces 502. Include the configured groups header when any manifest uses group restrictions. Authorization redirects and failures are returned to the client without being followed. Without either a trusted identity header on the request or `verify_url`, an authenticated app returns 401. A verified identity outside the manifest allow lists receives 403. An empty identity-header setting disables authentication and manifest principal checks for local development. When authentication is enabled and `admin_identity` is nonempty, the admin host requires that exact trusted or verifier-supplied identity.
 
-For a private wildcard ingress serving public and protected apps, Caddy should permit anonymous requests to reach the gateway. A separate public ingress can instead allowlist selected app hosts and require authentication on all their paths. It should strip client-supplied identity headers and proxy to mini-cloud. Mini-cloud skips verification for public apps and calls `verify_url` for protected apps.
+For a private wildcard ingress serving public and protected apps, Caddy should permit anonymous requests to reach the ordinary loopback listener. That listener skips verification for public apps and calls `verify_url` for protected apps. Keep it private and strip client-supplied identity headers.
+
+## Constrained public ingress
+
+On Linux, optionally provision a separate Unix socket for an Internet-facing
+proxy. It shares the existing gateway and app instances; it never serves the
+index or admin host:
+
+```json
+{
+  "public_ingress": {
+    "socket_path": "/run/mini-cloud-public/apps.sock",
+    "hosts": {
+      "shopping.apps.example.test": "shopping",
+      "work-board.apps.example.test": "work-board"
+    }
+  }
+}
+```
+
+Omit `public_ingress` to disable this listener. `socket_path` must be absolute,
+at most 100 bytes, with an existing parent directory writable by the gateway.
+The socket is mode 0660. A deployment-provisioned setgid parent directory can
+grant a separate proxy group access. The gateway refuses existing files,
+symlinks and active sockets, cleans up stale sockets after a crash, and removes
+its socket on shutdown. Bind-mount only this directory into a proxy container;
+do not bridge the ordinary loopback listener into it.
+
+`hosts` is a nonempty exact map from public hostname to app **directory name**.
+Hostnames may differ from private app hostnames: the original public Host is
+preserved for browser origin checks and cookies. Unknown/unlisted hosts, the
+index and admin return 404. Only `bubblewrap-hardened` process or CGI apps may be
+routed; a weaker profile or static runtime returns 503. Process acquisition
+rechecks the sandbox policy after waiting for startup or a draining restart,
+and public requests use Unix backend ingress even during a manifest change.
+
+This listener requires `auth.identity_header`, `auth.verify_url` and copying
+the verifier's identity header. It strips edge-supplied identities, including
+Remote-* and Remote_* headers, verifies every request even for `access: public`
+apps and API paths, and checks manifest principal restrictions afterward.
+A verifier bypass response without an identity fails closed. Forward-auth
+metadata uses the actual request method, URI and host and fixes the scheme to
+HTTPS. Forwarded client IPs still come from the trusted edge; do not use them
+for authentication bypass policies. These are defenses against a compromised
+edge forging identity or selecting other apps, not protection from that edge
+reading valid browser cookies, stealing sessions or modifying app traffic.
+
+The edge must provide HTTPS and trustworthy client IP metadata, strip incoming
+identity headers, allowlist the same hosts and require Authelia on every app
+path. Serve the login portal separately. Gateway configuration changes require
+a restart; app manifests remain live. See [public ingress example](../examples/public-ingress.json).

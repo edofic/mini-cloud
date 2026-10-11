@@ -32,15 +32,21 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 type Config struct {
-	Listen      string         `json:"listen"`
-	AppsDir     string         `json:"apps_dir"`
-	BaseDomain  string         `json:"base_domain"`
-	IndexHost   string         `json:"index_host"`
-	AdminHost   string         `json:"admin_host"`
-	DefaultIdle Duration       `json:"default_idle"`
-	Ports       PortRange      `json:"ports"`
-	Auth        AuthConfig     `json:"auth"`
-	Sandbox     SandboxRuntime `json:"sandbox,omitempty"`
+	Listen        string               `json:"listen"`
+	AppsDir       string               `json:"apps_dir"`
+	BaseDomain    string               `json:"base_domain"`
+	IndexHost     string               `json:"index_host"`
+	AdminHost     string               `json:"admin_host"`
+	DefaultIdle   Duration             `json:"default_idle"`
+	Ports         PortRange            `json:"ports"`
+	Auth          AuthConfig           `json:"auth"`
+	Sandbox       SandboxRuntime       `json:"sandbox,omitempty"`
+	PublicIngress *PublicIngressConfig `json:"public_ingress,omitempty"`
+}
+
+type PublicIngressConfig struct {
+	SocketPath string            `json:"socket_path"`
+	Hosts      map[string]string `json:"hosts"`
 }
 
 type PortRange struct {
@@ -96,6 +102,41 @@ func loadConfig(path string) (Config, error) {
 		u, err := url.Parse(c.Auth.VerifyURL)
 		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			return c, fmt.Errorf("auth.verify_url must be an HTTP(S) URL")
+		}
+	}
+	if p := c.PublicIngress; p != nil {
+		if runtime.GOOS != "linux" {
+			return c, fmt.Errorf("public_ingress requires Linux hardened sandboxes")
+		}
+		if !filepath.IsAbs(p.SocketPath) || len(p.SocketPath) > 100 {
+			return c, fmt.Errorf("public_ingress.socket_path must be an absolute Unix socket path of at most 100 bytes")
+		}
+		if len(p.Hosts) == 0 {
+			return c, fmt.Errorf("public_ingress.hosts must explicitly map at least one hostname to an app")
+		}
+		normalized := make(map[string]string)
+		for host, name := range p.Hosts {
+			host = strings.ToLower(host)
+			if !validHost(host) || host == strings.ToLower(c.IndexHost) || host == strings.ToLower(c.AdminHost) || normalized[host] != "" {
+				return c, fmt.Errorf("invalid, reserved or duplicate public_ingress hostname %q", host)
+			}
+			if !filepath.IsLocal(name) || filepath.Base(name) != name || strings.TrimSpace(name) != name {
+				return c, fmt.Errorf("invalid public_ingress app %q", name)
+			}
+			normalized[host] = name
+		}
+		p.Hosts = normalized
+		if c.Auth.IdentityHeader == "" || c.Auth.VerifyURL == "" {
+			return c, fmt.Errorf("public_ingress requires auth.identity_header and auth.verify_url")
+		}
+		copiedIdentity := false
+		for _, name := range c.Auth.CopyHeaders {
+			if strings.EqualFold(name, c.Auth.IdentityHeader) {
+				copiedIdentity = true
+			}
+		}
+		if !copiedIdentity {
+			return c, fmt.Errorf("public_ingress requires auth.copy_headers to include the identity header")
 		}
 	}
 	return c, nil

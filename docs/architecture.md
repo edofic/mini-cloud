@@ -14,6 +14,12 @@ On Linux, command-based apps may opt into a fixed Bubblewrap namespace preset. T
 
 The last successfully parsed manifest remains active. An invalid edit is logged and displayed on the admin page without breaking the running configuration.
 
+The optional public ingress Unix listener uses an explicit public-host-to-app
+map and forced verifier authentication, while the ordinary private listener
+retains its index, admin and manifest access behavior. Both share the app table,
+lifecycle and databases. Public ingress permits only hardened process/CGI apps;
+hardened HTTP processes use per-app Unix sockets inside private network namespaces.
+
 Application directories are watched recursively using native filesystem notifications: inotify on Linux and kqueue on macOS. The small `fsnotify` dependency provides one maintained interface for both platform-specific APIs. Notifications are briefly debounced before the gateway reconciles directory metadata and manifests, so multi-file and atomic editor saves normally produce one lifecycle change. Newly created directories are added to the recursive watch set during reconciliation.
 
 ## Runtime types
