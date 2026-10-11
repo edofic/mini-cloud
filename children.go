@@ -108,7 +108,7 @@ func appCommand(appDir, work string, args []string, sandbox string) *exec.Cmd {
 
 func closeChildFiles(cmd *exec.Cmd) {
 	for _, file := range cmd.ExtraFiles {
-		file.Close()
+		_ = file.Close()
 	}
 	cmd.ExtraFiles = nil
 }

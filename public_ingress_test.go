@@ -142,47 +142,71 @@ func TestPublicIngressUsesSeparateVerifier(t *testing.T) {
 	}
 }
 
+// macOS temp directories plus Go's test-name prefix exceed the Unix socket
+// path limit. Keep the socket in a short, private directory on both platforms.
+func testPublicSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "mc-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	return filepath.Join(dir, "public.sock")
+}
+
 func TestPublicIngressSocketDoesNotReplaceFilesOrActiveListeners(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "public.sock")
+	path := testPublicSocketPath(t)
 	if err := os.WriteFile(path, []byte("preserve"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := listenPublicIngress(path); err == nil {
 		t.Fatal("replaced a regular file")
 	}
-	os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
 	listener, err := listenPublicIngress(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	info, err := os.Stat(path)
 	if err != nil || info.Mode().Perm() != 0660 {
 		t.Fatalf("socket permissions: %v %v", info, err)
 	}
 	if other, err := listenPublicIngress(path); err == nil {
-		other.Close()
+		_ = other.Close()
 		t.Fatal("replaced active socket")
 	}
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
 	stale, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	stale.SetUnlinkOnClose(false)
-	stale.Close()
+	if err := stale.Close(); err != nil {
+		t.Fatal(err)
+	}
 	replacement, err := listenPublicIngress(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replacement.Close()
+	if err := replacement.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestPublicIngressListenerSharesGatewayLifecycle(t *testing.T) {
 	root := t.TempDir()
 	cfg := testConfig(root)
 	cfg.Listen = "127.0.0.1:0"
-	cfg.PublicIngress = &PublicIngressConfig{SocketPath: filepath.Join(root, "public.sock"), Hosts: map[string]string{"shopping.test": "shopping"}}
+	cfg.PublicIngress = &PublicIngressConfig{SocketPath: testPublicSocketPath(t), Hosts: map[string]string{"shopping.test": "shopping"}}
 	g := NewGateway(cfg)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
@@ -198,7 +222,7 @@ func TestPublicIngressListenerSharesGatewayLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatal("public listener exposed admin")
 	}

@@ -21,6 +21,8 @@ golangci-lint run
 
 Integration tests start a real HTTP child, proxy through it, edit its manifest, verify drain/restart, and wait for idle shutdown. Other tests exercise CGI parsing, last-valid configuration retention, stable ports, and cron expressions. The example smoke test runs all three runtime types.
 
+Public-ingress socket tests use short private directories under `/tmp` rather than the test-name directories produced by `t.TempDir()`, which exceed the Unix socket path limit on macOS. Sandbox verification tests check the configured verifier path and query, cookies, browser forwarding metadata, and removal of hop-by-hop headers.
+
 For lifecycle changes, also consider simultaneous cold requests, an edit during an active request, startup exit, idle/new-request races, SIGTERM with descendants, WebSocket drains, and cron overlap policies.
 
 CI checks formatting without changing files and runs the tests, race detector, vet, and example smoke tests on Linux and macOS. Linux CI also runs the linter, Bubblewrap test, and Docker build. The linter uses its standard checks; fix reported issues rather than disabling checks globally.

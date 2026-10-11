@@ -86,7 +86,9 @@ func (g *Gateway) Run(ctx context.Context) error {
 	defer cancel()
 	defer func() {
 		if g.sandboxRoot != "" {
-			os.RemoveAll(g.sandboxRoot)
+			if err := os.RemoveAll(g.sandboxRoot); err != nil {
+				log.Printf("sandbox_cleanup_error=%q", err)
+			}
 		}
 	}()
 	g.ctx = ctx
@@ -108,7 +110,7 @@ func (g *Gateway) Run(ctx context.Context) error {
 	if cfg := g.cfg.PublicIngress; cfg != nil {
 		publicListener, err := listenPublicIngress(cfg.SocketPath)
 		if err != nil {
-			listener.Close()
+			_ = listener.Close()
 			_ = watcher.Close()
 			return fmt.Errorf("listen public ingress: %w", err)
 		}
@@ -566,7 +568,10 @@ func (a *App) start() {
 			a.startFailed(err)
 			return
 		}
-		os.Remove(filepath.Join(runtimeDir, "backend", "app.sock"))
+		if err := os.Remove(filepath.Join(runtimeDir, "backend", "app.sock")); err != nil && !os.IsNotExist(err) {
+			a.startFailed(fmt.Errorf("remove stale backend socket: %w", err))
+			return
+		}
 		extra["LISTEN_NETWORK"] = "unix"
 		extra["LISTEN_ADDRESS"] = "/run/mini-cloud/backend/app.sock"
 	}
@@ -814,7 +819,7 @@ func buildEnv(appDir, work string, files []string, values, extra map[string]stri
 		if err != nil {
 			return nil, err
 		}
-		defer root.Close()
+		defer func() { _ = root.Close() }()
 	}
 	for _, f := range files {
 		var b []byte
