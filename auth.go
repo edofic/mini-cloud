@@ -1,13 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 )
 
 func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) bool {
+	return g.authorizeURI(w, r, r.URL.RequestURI())
+}
+
+func (g *Gateway) authorizeURI(w http.ResponseWriter, r *http.Request, uri string) bool {
 	cfg := g.cfg.Auth
 	if isPublicIngress(r.Context()) && g.cfg.PublicIngress != nil && g.cfg.PublicIngress.VerifyURL != "" {
 		cfg.VerifyURL = g.cfg.PublicIngress.VerifyURL
@@ -28,12 +34,17 @@ func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	for k, values := range r.Header {
+		// Application bearer credentials and referrers are not browser login
+		// credentials. Referrers can also contain OAuth callback secrets.
+		if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "Referer") {
+			continue
+		}
 		for _, value := range values {
 			req.Header.Add(k, value)
 		}
 	}
 	req.Header.Set("X-Forwarded-Method", r.Method)
-	req.Header.Set("X-Forwarded-Uri", r.URL.RequestURI())
+	req.Header.Set("X-Forwarded-Uri", uri)
 	req.Header.Set("X-Forwarded-Host", r.Host)
 	proto := r.Header.Get("X-Forwarded-Proto")
 	if proto == "" {
@@ -54,8 +65,11 @@ func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	defer func() { _ = resp.Body.Close() }()
+	for _, cookie := range resp.Header.Values("Set-Cookie") {
+		w.Header().Add("Set-Cookie", cookie)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		for _, name := range []string{"Location", "Set-Cookie", "Retry-After"} {
+		for _, name := range []string{"Location", "Retry-After"} {
 			for _, value := range resp.Header.Values(name) {
 				w.Header().Add(name, value)
 			}
@@ -80,13 +94,73 @@ func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (g *Gateway) authorizeApp(w http.ResponseWriter, r *http.Request, m Manifest) bool {
-	if !g.authorize(w, r) {
+	uri := r.URL.RequestURI()
+	for _, p := range m.AuthRedactQueryPaths {
+		if r.URL.Path == p {
+			uri = r.URL.EscapedPath()
+			break
+		}
+	}
+	if !g.authorizeURI(w, r, uri) {
 		return false
 	}
 	if g.appAccessAllowed(r, m) {
 		return true
 	}
 	http.Error(w, "application access denied", http.StatusForbidden)
+	return false
+}
+
+// Exceptions never forward identities, even from a trusted upstream: the app
+// receives only its own API credentials on these routes.
+func (g *Gateway) clearIdentity(r *http.Request) {
+	for name := range r.Header {
+		lower := strings.ToLower(name)
+		if strings.HasPrefix(lower, "remote-") || strings.HasPrefix(lower, "remote_") {
+			r.Header.Del(name)
+		}
+	}
+	for _, name := range append(append([]string{}, g.cfg.Auth.CopyHeaders...), g.cfg.Auth.IdentityHeader, g.cfg.Auth.GroupsHeader) {
+		r.Header.Del(name)
+	}
+}
+
+func canonicalAuthPath(p string) bool {
+	if !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%?#") {
+		return false
+	}
+	for _, c := range p {
+		if c <= ' ' || c == 127 {
+			return false
+		}
+	}
+	return p == path.Clean(p) || p != "/" && p == path.Clean(p)+"/"
+}
+
+func validateAuthPaths(field string, patterns []string, wildcard bool) error {
+	for _, pattern := range patterns {
+		p := pattern
+		if wildcard && strings.HasSuffix(p, "/*") {
+			p = strings.TrimSuffix(p, "*")
+		}
+		if !canonicalAuthPath(p) || strings.Contains(p, "*") {
+			return fmt.Errorf("%s: invalid canonical absolute path %q", field, pattern)
+		}
+	}
+	return nil
+}
+
+func matchesPublicPath(r *http.Request, patterns []string) bool {
+	// An escaped separator can change routing after another decoding pass.
+	escaped := strings.ToLower(r.URL.EscapedPath())
+	if !canonicalAuthPath(r.URL.Path) || strings.Contains(escaped, "%2f") || strings.Contains(escaped, "%5c") {
+		return false
+	}
+	for _, pattern := range patterns {
+		if r.URL.Path == pattern || strings.HasSuffix(pattern, "/*") && strings.HasPrefix(r.URL.Path, strings.TrimSuffix(pattern, "*")) {
+			return true
+		}
+	}
 	return false
 }
 

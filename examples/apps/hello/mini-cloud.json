@@ -2,6 +2,7 @@
   "access": "authenticated",
   "access_users": ["demo"],
   "access_groups": ["admin"],
+  "public_paths": ["/health"],
   "process": {
     "command": ["python3", "./server.py", "--port", "${PORT}"],
     "working_directory": ".",

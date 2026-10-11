@@ -72,6 +72,9 @@ Select exactly one runtime:
 - `description`: Short text shown on the app tile.
 - `icon`: App-relative image path used by the tile. Mini-cloud reads it directly without waking a process app; keep the path inside the app directory.
 - `access`: `public` or `authenticated`; defaults to authenticated.
+- `access_users` / `access_groups`: Optional exact, case-sensitive allow lists combined with OR; require authenticated access.
+- `public_paths`: Authenticated apps may exempt exact paths or descendants ending in `/*` on the ordinary listener. Declare `/api` and `/api/*` separately. Query strings do not affect matching. Canonical paths only; no regex or other wildcards. Apps must still enforce API bearer credentials. Exceptions clear identity headers, preserve Authorization, leave tiles/icons protected, and never bypass public-ingress verification.
+- `auth_redact_query_paths`: Exact paths whose query is omitted from verifier metadata, for example `/admin/gmail/callback`. The app retains the original query. Protected routes receive verified identity headers; keep CSRF and API permission checks in the app.
 - `sandbox`: Linux-only optional `bubblewrap`; applies a lightweight namespace and read-only-host-filesystem preset to process, CGI, and cron commands. The app directory remains writable and networking remains shared. Omit it on macOS.
 - `idle`: Process idle timeout; `"0s"` disables idle shutdown.
 - `watch.ignore`: Relative file or directory patterns that should not trigger restarts. Exclude databases, caches, generated files, and other mutable state.

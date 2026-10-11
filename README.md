@@ -32,6 +32,8 @@ Edit `examples/apps/hello/server.py` or `examples/apps/hello/.env` and request i
 
 The gateway watches immediate child directories of `apps_dir`. A process app receives a stable loopback port and `PORT`/`LISTEN_ADDRESS`; it starts on demand and stops after its idle timeout. CGI starts once per request. Static files are read from disk on every request. Invalid manifests leave the last valid configuration active and appear in the admin view.
 
+Authenticated apps can declare [`public_paths`](docs/application-manifest.md) for API routes that validate their own bearer tokens, while browser pages keep gateway authentication and user/group restrictions.
+
 The gateway is designed for one trusted Unix user. Put it behind a TLS/authentication proxy such as Caddy when serving protected or public applications. The legacy bubblewrap preset limits process visibility and writes; the hardened profile also restricts readable files and network access. Both share the host kernel and UID and leave CPU, memory, process and disk quotas to the deployment. It does not provide full containers, builds, releases, rollback, backups, DNS, or distributed scheduling.
 
 An optional [constrained public ingress socket](docs/gateway-configuration.md#constrained-public-ingress)

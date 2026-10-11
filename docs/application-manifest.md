@@ -15,6 +15,7 @@ Common fields:
   "access": "authenticated",
   "access_users": ["alice"],
   "access_groups": ["admin"],
+  "public_paths": ["/api", "/api/*", "/health"],
   "sandbox": "bubblewrap",
   "idle": "5m",
   "watch": { "ignore": ["data", "tmp/*"] },
@@ -31,6 +32,12 @@ The preset gives commands private user, PID, IPC, UTS, mount, `/tmp`, `/proc`, a
 This is lightweight damage containment, not a confidentiality or multi-tenant boundary: commands can read files visible to the gateway user, use the host network, consume unbounded resources, and cooperate through the writable app directory. See the [security model](security.md#optional-bubblewrap-sandbox).
 
 For an authenticated app, `access_users` and `access_groups` optionally restrict access to the listed identities and groups. The lists are combined with OR semantics: the example permits user `alice` and every member of group `admin`. With neither list, any authenticated identity is accepted for backward compatibility. Principal matching is exact and case-sensitive. Public apps cannot specify either list. The app directory uses these same rules and omits apps the current identity cannot access.
+
+Authenticated apps can declare `public_paths` to skip gateway authentication and principal checks for selected requests on the ordinary listener. Paths match exactly, except a trailing `/*` matches descendants: `/api/*` matches `/api/` and `/api/items`, but not `/api` or `/apiculture`. Declare `/api` separately when needed. Matching ignores query strings and applies to every HTTP method. No other glob or regular-expression syntax is supported. Paths must be canonical absolute paths without query strings, fragments, percent escapes, backslashes, control characters, repeated slashes, or dot segments. Apps declaring exceptions reject ambiguous decoded request paths with 400; encoded separators never qualify for an exception. An invalid manifest edit retains the last valid configuration and exposes its error in admin.
+
+A path exception makes the route public **to the gateway**. APIs must still validate their own bearer tokens and permissions; browser cookies do not substitute for API credentials. Exception requests preserve `Authorization` but clear configured identity/copied headers and `Remote-*`/`Remote_*`. All other paths keep the app's normal authentication and allow lists. Exceptions do not change tile or icon visibility, and do not override the separate public-ingress listener's mandatory verification.
+
+Optional `auth_redact_query_paths` is a list of exact canonical paths whose query strings are omitted from the verifier's `X-Forwarded-Uri`. Use it for OAuth callbacks, for example `["/admin/gmail/callback"]`; the application still receives the original query string. It supports no wildcards. Verifier requests omit `Authorization` and `Referer`, and successful verification forwards session `Set-Cookie` headers to the browser. Applications can use verified identity headers on protected routes for ownership or audit records, behind the trusted proxy/gateway boundary.
 
 Watch patterns are relative to the app root and use shell-style path matching: `*` does not cross `/`, and `**` has no special recursive meaning. Matching directories are excluded recursively. Top-level `.git`, `.hg`, and `.svn` directories are always ignored, as are `AGENTS.md`, `AGENTS.override.md`, `.agents`, and mini-cloud's temporary managed files. Agent-guidance changes do not restart processes and need no manifest ignore patterns. Manifest and `.env` changes otherwise restart a running process. Ignore databases, caches, and generated output to prevent restart loops. See [live editing limitations](operations.md#live-editing).
 

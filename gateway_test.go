@@ -460,7 +460,12 @@ func TestIndexRequiresAuthenticationAndFiltersApps(t *testing.T) {
 		dir := filepath.Join(root, app.name)
 		_ = os.MkdirAll(filepath.Join(dir, "public"), 0755)
 		_ = os.WriteFile(filepath.Join(dir, "public", "icon.svg"), []byte(app.name), 0644)
+		var publicPaths []string
+		if app.name == "private" {
+			publicPaths = []string{"/api/*"}
+		}
 		writeJSON(t, filepath.Join(dir, manifestName), Manifest{
+			PublicPaths:  publicPaths,
 			DisplayName:  app.display,
 			Icon:         "public/icon.svg",
 			Access:       app.access,

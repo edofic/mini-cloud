@@ -39,7 +39,7 @@ func TestPublicIngressAlwaysVerifiesIdentityAndAPIPaths(t *testing.T) {
 	g.ctx = t.Context()
 	g.cfg.Auth = AuthConfig{IdentityHeader: "X-Identity", VerifyURL: verifier.URL, CopyHeaders: []string{"X-Identity"}}
 	g.cfg.PublicIngress = &PublicIngressConfig{Hosts: map[string]string{"shopping.test": "shopping"}}
-	a := &App{gw: g, name: "shopping", manifest: Manifest{Sandbox: hardenedSandbox, Access: "public", Process: &ProcessConfig{}}, manualStop: true}
+	a := &App{gw: g, name: "shopping", manifest: Manifest{Sandbox: hardenedSandbox, Access: "authenticated", PublicPaths: []string{"/api/*"}, Process: &ProcessConfig{}}, manualStop: true}
 	g.apps["shopping"] = a
 	for _, tc := range []struct {
 		cookie string

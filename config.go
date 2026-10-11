@@ -150,21 +150,23 @@ func loadConfig(path string) (Config, error) {
 }
 
 type Manifest struct {
-	Host           string          `json:"host"`
-	DisplayName    string          `json:"display_name"`
-	Description    string          `json:"description"`
-	Icon           string          `json:"icon"`
-	Access         string          `json:"access"`
-	AccessUsers    []string        `json:"access_users,omitempty"`
-	AccessGroups   []string        `json:"access_groups,omitempty"`
-	Sandbox        string          `json:"sandbox,omitempty"`
-	SandboxOptions *SandboxOptions `json:"sandbox_options,omitempty"`
-	Process        *ProcessConfig  `json:"process,omitempty"`
-	Static         *StaticConfig   `json:"static,omitempty"`
-	CGI            *CGIConfig      `json:"cgi,omitempty"`
-	Idle           *Duration       `json:"idle,omitempty"`
-	Watch          WatchConfig     `json:"watch"`
-	Cron           []CronConfig    `json:"cron"`
+	Host                 string          `json:"host"`
+	DisplayName          string          `json:"display_name"`
+	Description          string          `json:"description"`
+	Icon                 string          `json:"icon"`
+	Access               string          `json:"access"`
+	AccessUsers          []string        `json:"access_users,omitempty"`
+	AccessGroups         []string        `json:"access_groups,omitempty"`
+	PublicPaths          []string        `json:"public_paths,omitempty"`
+	AuthRedactQueryPaths []string        `json:"auth_redact_query_paths,omitempty"`
+	Sandbox              string          `json:"sandbox,omitempty"`
+	SandboxOptions       *SandboxOptions `json:"sandbox_options,omitempty"`
+	Process              *ProcessConfig  `json:"process,omitempty"`
+	Static               *StaticConfig   `json:"static,omitempty"`
+	CGI                  *CGIConfig      `json:"cgi,omitempty"`
+	Idle                 *Duration       `json:"idle,omitempty"`
+	Watch                WatchConfig     `json:"watch"`
+	Cron                 []CronConfig    `json:"cron"`
 }
 
 type ProcessConfig struct {
@@ -248,6 +250,15 @@ func loadManifest(dir string) (Manifest, error) {
 	}
 	if m.Access == "public" && (len(m.AccessUsers) != 0 || len(m.AccessGroups) != 0) {
 		return m, fmt.Errorf("access_users and access_groups require authenticated access")
+	}
+	if len(m.PublicPaths) != 0 && m.Access != "authenticated" {
+		return m, fmt.Errorf("public_paths requires authenticated access")
+	}
+	if err := validateAuthPaths("public_paths", m.PublicPaths, true); err != nil {
+		return m, err
+	}
+	if err := validateAuthPaths("auth_redact_query_paths", m.AuthRedactQueryPaths, false); err != nil {
+		return m, err
 	}
 	if err := validateSandbox(m.Sandbox, runtime.GOOS); err != nil {
 		return m, err

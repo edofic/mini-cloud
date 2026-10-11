@@ -184,8 +184,18 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	manifest := a.manifest
 	a.mu.Unlock()
-	if manifest.Access != "public" && !g.authorizeApp(w, r, manifest) {
-		return
+	if manifest.Access == "public" {
+		g.clearIdentity(r)
+	} else {
+		if len(manifest.PublicPaths) != 0 && !canonicalAuthPath(r.URL.Path) {
+			http.Error(w, "ambiguous application path", http.StatusBadRequest)
+			return
+		}
+		if matchesPublicPath(r, manifest.PublicPaths) {
+			g.clearIdentity(r)
+		} else if !g.authorizeApp(w, r, manifest) {
+			return
+		}
 	}
 	a.serveManifest(w, r, manifest)
 }
