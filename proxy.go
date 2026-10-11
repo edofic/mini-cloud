@@ -56,7 +56,7 @@ func waitReadyUnix(ctx context.Context, socket string, cfg ReadinessConfig) erro
 			req, _ := http.NewRequestWithContext(ctx, "GET", "http://backend"+path, nil)
 			resp, err := client.Do(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 					return nil
 				}
@@ -66,7 +66,7 @@ func waitReadyUnix(ctx context.Context, socket string, cfg ReadinessConfig) erro
 			conn, err := dialSandboxBackend(probeCtx, socket)
 			cancel()
 			if err == nil {
-				conn.Close()
+				_ = conn.Close()
 				return nil
 			}
 		}

@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -101,7 +104,7 @@ func (g *Gateway) sandboxRuntime(name string, opts *SandboxOptions) (string, err
 		return "", err
 	}
 	if err := os.Chmod(filepath.Join(dir, "egress.sock"), 0600); err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return "", err
 	}
 	policy := &egressPolicy{}
@@ -124,8 +127,12 @@ func (g *Gateway) sandboxRuntime(name string, opts *SandboxOptions) (string, err
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	context.AfterFunc(ctx, func() { bounded.Close(); server.Close() })
-	go server.Serve(bounded)
+	context.AfterFunc(ctx, func() { _ = bounded.Close(); _ = server.Close() })
+	go func() {
+		if err := server.Serve(bounded); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+			log.Printf("app=%s egress_error=%q", name, err)
+		}
+	}()
 	return dir, nil
 }
 
@@ -181,13 +188,13 @@ func (g *Gateway) sandboxCommand(appDir, work string, args []string, sandbox str
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	var mounts []*os.File
 	success := false
 	defer func() {
 		if !success {
 			for _, f := range mounts {
-				f.Close()
+				_ = f.Close()
 			}
 		}
 	}()
@@ -273,18 +280,24 @@ func sandboxExec(args []string) error {
 			return fmt.Errorf("sandbox-exec requires a command")
 		}
 	}
-	os.Unsetenv("MINI_CLOUD_SANDBOX_COMMAND")
+	if err := os.Unsetenv("MINI_CLOUD_SANDBOX_COMMAND"); err != nil {
+		return err
+	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	proxy := "http://" + listener.Addr().String()
 	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
-		os.Setenv(key, proxy)
+		if err := os.Setenv(key, proxy); err != nil {
+			return err
+		}
 	}
 	for _, key := range []string{"ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"} {
-		os.Unsetenv(key)
+		if err := os.Unsetenv(key); err != nil {
+			return err
+		}
 	}
 	relaySlots := make(chan struct{}, 128)
 	go func() {
@@ -296,22 +309,27 @@ func sandboxExec(args []string) error {
 			select {
 			case relaySlots <- struct{}{}:
 			default:
-				conn.Close()
+				_ = conn.Close()
 				continue
 			}
 			go func() {
 				defer func() { <-relaySlots }()
-				defer conn.Close()
+				defer func() { _ = conn.Close() }()
 				upstream, err := net.DialTimeout("unix", "/run/mini-cloud/egress.sock", 10*time.Second)
 				if err != nil {
 					return
 				}
-				defer upstream.Close()
+				defer func() { _ = upstream.Close() }()
 				done := make(chan struct{})
-				go func() { io.Copy(upstream, conn); upstream.(*net.UnixConn).CloseWrite(); close(done) }()
-				io.Copy(conn, upstream)
-				conn.Close()
-				upstream.Close()
+				// Peer disconnects end the relay; cleanup releases the slot.
+				go func() {
+					_, _ = io.Copy(upstream, conn)
+					_ = upstream.(*net.UnixConn).CloseWrite()
+					close(done)
+				}()
+				_, _ = io.Copy(conn, upstream)
+				_ = conn.Close()
+				_ = upstream.Close()
 				<-done
 			}()
 		}

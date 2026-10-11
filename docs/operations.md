@@ -28,6 +28,8 @@ journalctl -u mini-cloud.service -f
 
 Entries include fields such as `app=hello`, `job=cleanup`, `stream=stderr`, and `event=ready`. The gateway does not store or query historical logs.
 
+Unexpected sandbox egress-server failures are logged with `app` and `egress_error`; failure to remove the sandbox runtime directory during shutdown is logged with `sandbox_cleanup_error`.
+
 The configured admin host shows runtime type, access, sandbox mode, state, port, active requests, restart count, cron results, process errors, manifest errors, and agent-guidance errors. `/api/apps` returns the same snapshot as JSON. The page is intentionally observational: it has no deploy or remote process-control actions.
 
 ## Shutdown

@@ -29,14 +29,17 @@ func TestMain(m *testing.M) {
 		resp, egressErr := http.Get("https://api.openai.com/v1/models")
 		egressDenied := egressErr != nil || resp.StatusCode == 403
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		conn, hostErr := net.DialTimeout("tcp", os.Getenv("HOST_BACKEND"), 200*time.Millisecond)
 		if conn != nil {
-			conn.Close()
+			_ = conn.Close()
 		}
 		_, utcOffset := time.Now().Zone()
-		json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel", "host_timezone_preserved": fmt.Sprint(utcOffset) == os.Getenv("EXPECTED_UTC_OFFSET")})
+		if err := json.NewEncoder(os.Stdout).Encode(map[string]bool{"code_readonly": codeErr != nil, "data_writable": dataErr == nil, "host_secret_hidden": secretErr != nil, "host_network_hidden": hostErr != nil, "host_env_hidden": os.Getenv("HOST_SECRET_ENV") == "", "egress_denied_by_default": egressDenied, "declared_env_inside_only": os.Getenv("LD_PRELOAD") == "/missing/sandbox-loader-sentinel", "host_timezone_preserved": fmt.Sprint(utcOffset) == os.Getenv("EXPECTED_UTC_OFFSET")}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 	if len(os.Args) > 1 && os.Args[1] == "sandbox-cgi-probe" {
@@ -67,7 +70,7 @@ func TestHardenedPublicCGIMetadataAndLauncherEnvironment(t *testing.T) {
 	g := NewGateway(cfg)
 	ctx, cancel := context.WithCancel(t.Context())
 	g.ctx = ctx
-	defer func() { cancel(); g.stopAll(); os.RemoveAll(g.sandboxRoot) }()
+	defer func() { cancel(); g.stopAll(); _ = os.RemoveAll(g.sandboxRoot) }()
 	if err := g.scan(); err != nil {
 		t.Fatal(err)
 	}
@@ -148,12 +151,14 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	secret := filepath.Join(filepath.Dir(appDir), "host-secret")
-	os.WriteFile(secret, []byte("secret"), 0600)
+	if err := os.WriteFile(secret, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	t.Setenv("HOST_SECRET_ENV", "secret")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -163,7 +168,7 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(g.sandboxRoot)
+	defer func() { _ = os.RemoveAll(g.sandboxRoot) }()
 	_, utcOffset := time.Now().Zone()
 	env, err := buildEnv(appDir, ".", nil, map[string]string{"EXPECTED_UTC_OFFSET": fmt.Sprint(utcOffset), "HOST_SECRET_PATH": secret, "HOST_BACKEND": listener.Addr().String(), "LD_PRELOAD": "/missing/sandbox-loader-sentinel", "DECLARED_SECRET": "secret-not-in-argv"}, nil, false)
 	if err != nil {
@@ -177,7 +182,7 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 		t.Fatal("app secrets or loader environment reached host launcher")
 	}
 	for _, f := range cmd.ExtraFiles {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -199,17 +204,38 @@ func TestHardenedSandboxIntegration(t *testing.T) {
 
 func TestEgressAuthAliasOnlyForwardsVerification(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/authz/forward-auth" || r.Header.Get("Cookie") != "session=test" {
+		if r.URL.RequestURI() != "/api/authz/forward-auth?policy=public" || r.Header.Get("Cookie") != "session=test" {
 			t.Error("wrong auth forwarding")
+		}
+		for name, want := range map[string]string{
+			"X-Forwarded-For":    "203.0.113.7",
+			"X-Forwarded-Host":   "shopping.test",
+			"X-Forwarded-Proto":  "https",
+			"X-Forwarded-Method": "POST",
+			"X-Forwarded-Uri":    "/api/items?done=1",
+		} {
+			if got := r.Header.Get(name); got != want {
+				t.Errorf("verifier header %s = %q, want %q", name, got, want)
+			}
+		}
+		if r.Header.Get("X-Hop-Only") != "" {
+			t.Error("hop-by-hop header reached verifier")
 		}
 		w.Header().Set("Remote-User", "verified")
 		w.WriteHeader(200)
 	}))
 	defer upstream.Close()
 	p := &egressPolicy{}
-	p.set(&SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}, upstream.URL+"/api/authz/forward-auth", nil)
+	p.set(&SandboxOptions{Network: SandboxNetwork{ForwardAuth: true}}, upstream.URL+"/api/authz/forward-auth?policy=public", nil)
 	r := httptest.NewRequest("GET", "http://auth.mini-cloud.internal/verify", nil)
 	r.Header.Set("Cookie", "session=test")
+	r.Header.Set("X-Forwarded-For", "203.0.113.7")
+	r.Header.Set("X-Forwarded-Host", "shopping.test")
+	r.Header.Set("X-Forwarded-Proto", "https")
+	r.Header.Set("X-Forwarded-Method", "POST")
+	r.Header.Set("X-Forwarded-Uri", "/api/items?done=1")
+	r.Header.Set("Connection", "X-Hop-Only")
+	r.Header.Set("X-Hop-Only", "remove-me")
 	w := httptest.NewRecorder()
 	newEgressServer(p).Handler.ServeHTTP(w, r)
 	if w.Code != 200 || w.Header().Get("Remote-User") != "verified" {
@@ -228,14 +254,20 @@ func TestEgressAuthAliasOnlyForwardsVerification(t *testing.T) {
 func TestHardenedEnvironmentFilesStayInsideApp(t *testing.T) {
 	app := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "secret.env")
-	os.WriteFile(outside, []byte("SECRET=value"), 0600)
-	os.Symlink(outside, filepath.Join(app, "link.env"))
+	if err := os.WriteFile(outside, []byte("SECRET=value"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(app, "link.env")); err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{outside, "../secret.env", "link.env"} {
 		if _, err := buildEnv(app, ".", []string{path}, nil, nil, false); err == nil {
 			t.Fatalf("read environment outside app: %s", path)
 		}
 	}
-	os.WriteFile(filepath.Join(app, "local.env"), []byte("DECLARED=ok"), 0600)
+	if err := os.WriteFile(filepath.Join(app, "local.env"), []byte("DECLARED=ok"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	env, err := buildEnv(app, ".", []string{"local.env"}, nil, nil, false)
 	if err != nil || env["DECLARED"] != "ok" {
 		t.Fatalf("app environment file: %v", err)
@@ -289,16 +321,18 @@ func TestSandboxBackendDoesNotFollowSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	conn, err := dialSandboxBackend(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn.Close()
+	_ = conn.Close()
 	link := filepath.Join(dir, "link.sock")
-	os.Symlink(path, link)
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
 	if conn, err := dialSandboxBackend(context.Background(), link); err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Fatal("followed app-controlled socket symlink")
 	}
 }
@@ -310,12 +344,12 @@ func TestEgressConnectionLimitsIncludeIdleConnections(t *testing.T) {
 	}
 	global := make(chan struct{}, 1)
 	listener := newEgressListener(inner, 1, global)
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	client, err := net.Dial("tcp", inner.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	server, err := listener.Accept()
 	if err != nil {
 		t.Fatal(err)
@@ -326,19 +360,21 @@ func TestEgressConnectionLimitsIncludeIdleConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer excess.Close()
-	excess.SetReadDeadline(time.Now().Add(time.Second))
+	defer func() { _ = excess.Close() }()
+	if err := excess.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := excess.Read(make([]byte, 1)); err == nil {
 		t.Fatal("excess connection stayed open")
 	} else if e, ok := err.(net.Error); ok && e.Timeout() {
 		t.Fatal("connection limit did not reject excess idle connection")
 	}
-	server.Close()
+	_ = server.Close()
 	next, err := net.Dial("tcp", inner.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer next.Close()
+	defer func() { _ = next.Close() }()
 	select {
 	case conn := <-accepted:
 		if conn == nil {
@@ -347,7 +383,7 @@ func TestEgressConnectionLimitsIncludeIdleConnections(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("released slot was not reusable")
 	}
-	listener.Close()
+	_ = listener.Close()
 	if len(global) != 0 {
 		t.Fatal("listener shutdown leaked global slots")
 	}

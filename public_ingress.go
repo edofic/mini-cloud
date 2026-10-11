@@ -28,7 +28,7 @@ func listenPublicIngress(path string) (net.Listener, error) {
 		}
 		conn, dialErr := net.DialTimeout("unix", path, 200*time.Millisecond)
 		if dialErr == nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, fmt.Errorf("public ingress socket is already in use")
 		}
 		if !errors.Is(dialErr, syscall.ECONNREFUSED) {
@@ -45,7 +45,7 @@ func listenPublicIngress(path string) (net.Listener, error) {
 		return nil, err
 	}
 	if err := os.Chmod(path, 0660); err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return nil, err
 	}
 	return listener, nil

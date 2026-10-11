@@ -20,7 +20,7 @@ func dialSandboxBackend(ctx context.Context, path string) (net.Conn, error) {
 		return nil, err
 	}
 	f := os.NewFile(uintptr(fd), path)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
 		return nil, err

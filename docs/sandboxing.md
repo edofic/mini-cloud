@@ -75,6 +75,10 @@ inode is pinned while connecting. PORT remains allocated for diagnostics and
 compatibility but is not the hardened ingress. Existing unsandboxed and
 `bubblewrap` apps continue to receive their host-loopback TCP address.
 
+Before starting a hardened process, the gateway removes its previous backend
+socket. If that removal fails for a reason other than a missing socket, startup
+fails and exposes the error in admin rather than launching with a stale path.
+
 No host interfaces or host loopback are reachable in the private network
 namespace. Standard HTTP(S) proxy variables point to a sandbox-local relay and
 then to a filtered, per-app Unix proxy owned by the gateway. Clients must support
@@ -99,6 +103,10 @@ sessions without reaching other host services or the rest of Authelia's API.
 When `public_ingress.verify_url` is configured, verification for this app's
 public aliases (identified by `X-Forwarded-Host`) uses that endpoint instead.
 Private hosts and other apps' aliases retain the private verifier.
+
+Verification preserves the configured endpoint path and query, cookies, and the
+app-supplied browser forwarding metadata. Hop-by-hop headers are removed before
+forwarding.
 
 Egress connections, including idle connections and CONNECT tunnels, are capped
 at 32 per app (`max_connections`, configurable from 1 to 256) and 128 per gateway

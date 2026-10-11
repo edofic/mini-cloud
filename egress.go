@@ -125,29 +125,33 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 			// CONNECT is only for HTTPS. HTTP is forwarded as HTTP, never an arbitrary tunnel.
 			_, port, err := net.SplitHostPort(r.Host)
 			if err != nil || port != "443" {
-				http.Error(w, "destination not permitted", 403)
+				http.Error(w, "destination not permitted", http.StatusForbidden)
 				return
 			}
 			upstream, err := policy.dial(r.Context(), "tcp", r.Host)
 			if err != nil {
-				http.Error(w, "destination not permitted or unavailable", 403)
+				http.Error(w, "destination not permitted or unavailable", http.StatusForbidden)
 				return
 			}
 			hijacker, ok := w.(http.Hijacker)
 			if !ok {
-				upstream.Close()
-				http.Error(w, "tunneling unavailable", 500)
+				_ = upstream.Close()
+				http.Error(w, "tunneling unavailable", http.StatusInternalServerError)
 				return
 			}
 			conn, buffer, err := hijacker.Hijack()
 			if err != nil {
-				upstream.Close()
+				_ = upstream.Close()
 				return
 			}
-			defer conn.Close()
-			defer upstream.Close()
-			conn.SetDeadline(time.Now().Add(5 * time.Minute))
-			upstream.SetDeadline(time.Now().Add(5 * time.Minute))
+			defer func() { _ = conn.Close() }()
+			defer func() { _ = upstream.Close() }()
+			if err := conn.SetDeadline(time.Now().Add(5 * time.Minute)); err != nil {
+				return
+			}
+			if err := upstream.SetDeadline(time.Now().Add(5 * time.Minute)); err != nil {
+				return
+			}
 			if _, err := buffer.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 				return
 			}
@@ -155,16 +159,21 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 				return
 			}
 			done := make(chan struct{})
-			go func() { io.Copy(upstream, buffer); upstream.(*net.TCPConn).CloseWrite(); close(done) }()
-			io.Copy(conn, upstream)
+			// A peer disconnect ends copying; cleanup still closes both halves.
+			go func() {
+				_, _ = io.Copy(upstream, buffer)
+				_ = upstream.(*net.TCPConn).CloseWrite()
+				close(done)
+			}()
+			_, _ = io.Copy(conn, upstream)
 			if half, ok := conn.(interface{ CloseWrite() error }); ok {
-				half.CloseWrite()
+				_ = half.CloseWrite()
 			}
 			<-done
 			return
 		}
 		if r.URL.Scheme != "http" || r.URL.User != nil || r.URL.Fragment != "" {
-			http.Error(w, "HTTP proxy request required", 400)
+			http.Error(w, "HTTP proxy request required", http.StatusBadRequest)
 			return
 		}
 		if r.URL.Hostname() == "auth.mini-cloud.internal" {
@@ -175,22 +184,29 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 			}
 			policy.mu.RUnlock()
 			if verifyURL == "" || r.Method != "GET" || r.URL.Path != "/verify" || r.URL.RawQuery != "" || r.URL.Port() != "" {
-				http.Error(w, "authentication endpoint not permitted", 403)
+				http.Error(w, "authentication endpoint not permitted", http.StatusForbidden)
 				return
 			}
 			target, err := url.Parse(verifyURL)
 			if err != nil {
-				http.Error(w, "authentication unavailable", 502)
+				http.Error(w, "authentication unavailable", http.StatusBadGateway)
 				return
 			}
-			proxy := httputil.NewSingleHostReverseProxy(target)
-			proxy.Director = func(out *http.Request) {
-				out.URL.Scheme = target.Scheme
-				out.URL.Host = target.Host
-				out.URL.Path = target.Path
-				out.URL.RawQuery = target.RawQuery
-				out.Host = target.Host
-			}
+			proxy := &httputil.ReverseProxy{Rewrite: func(p *httputil.ProxyRequest) {
+				p.Out.URL.Scheme = target.Scheme
+				p.Out.URL.Host = target.Host
+				p.Out.URL.Path = target.Path
+				p.Out.URL.RawPath = target.RawPath
+				p.Out.URL.RawQuery = target.RawQuery
+				p.Out.Host = target.Host
+				// Rewrite removes forwarding headers. The verifier needs the
+				// browser metadata supplied by the app's forward-auth request.
+				for _, name := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"} {
+					if values := p.In.Header.Values(name); len(values) != 0 {
+						p.Out.Header[name] = append([]string(nil), values...)
+					}
+				}
+			}}
 			authTransport := &http.Transport{Proxy: nil, ResponseHeaderTimeout: 10 * time.Second}
 			defer authTransport.CloseIdleConnections()
 			proxy.Transport = authTransport
@@ -202,7 +218,7 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 			port = "80"
 		}
 		if port != "80" || !policy.allowed(r.URL.Hostname()) {
-			http.Error(w, "destination not permitted", 403)
+			http.Error(w, "destination not permitted", http.StatusForbidden)
 			return
 		}
 		proxy := &httputil.ReverseProxy{Transport: transport, Rewrite: func(out *httputil.ProxyRequest) {
@@ -211,7 +227,7 @@ func newEgressServer(policy *egressPolicy) *http.Server {
 			out.Out.Host = r.URL.Host
 			out.Out.Header.Del("Proxy-Authorization")
 		}, ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			http.Error(w, "destination not permitted or unavailable", 502)
+			http.Error(w, "destination not permitted or unavailable", http.StatusBadGateway)
 		}}
 		proxy.ServeHTTP(w, r)
 	})}
@@ -244,21 +260,21 @@ func (l *egressListener) Accept() (net.Conn, error) {
 		select {
 		case l.global <- struct{}{}:
 		default:
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 		select {
 		case l.slots <- struct{}{}:
 		default:
 			<-l.global
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 		wrapped := &egressConn{Conn: conn, owner: l}
 		l.mu.Lock()
 		if l.closed {
 			l.mu.Unlock()
-			wrapped.Close()
+			_ = wrapped.Close()
 			return nil, net.ErrClosed
 		}
 		l.connections[wrapped] = true
@@ -287,7 +303,7 @@ func (l *egressListener) Close() error {
 	}
 	l.mu.Unlock()
 	for _, conn := range conns {
-		conn.Close()
+		_ = conn.Close()
 	}
 	return err
 }
