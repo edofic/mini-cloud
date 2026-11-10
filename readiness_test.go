@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -14,6 +15,9 @@ import (
 // Use the same server over both transports to exercise both readiness loops.
 func readinessServer(t *testing.T, network string, handler http.Handler) func(context.Context, ReadinessConfig) error {
 	t.Helper()
+	if network == "unix" && runtime.GOOS != "linux" {
+		t.Skip("hardened Unix-socket readiness requires Linux")
+	}
 	address := "127.0.0.1:0"
 	if network == "unix" {
 		dir, err := os.MkdirTemp("", "mc-ready-")
