@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestManifestRejectsPrincipalsOnPublicApp(t *testing.T) {
@@ -45,6 +46,9 @@ func TestRejectInvalidManifestSettings(t *testing.T) {
 		`{"cgi":{"command":["true"],"maximum_concurrency":-1}}`,
 		`{"cgi":{"command":["true"],"timeout":"-1s"}}`,
 		`{"process":{"command":["true"],"readiness":{"type":"maybe"}}}`,
+		`{"process":{"command":["true"],"readiness":{"interval":"-1ms"}}}`,
+		`{"process":{"command":["true"],"readiness":{"interval":"fast"}}}`,
+		`{"process":{"command":["true"],"readiness":{"interval":1}}}`,
 		`{"process":{"command":["true"],"restart":{"policy":"maybe"}}}`,
 		`{"process":{"command":["true"],"restart":{"maximum_attempts":-1}}}`,
 		`{"process":{"command":["true"],"startup_timeout":"-1s"}}`,
@@ -127,5 +131,33 @@ func TestPublicIngressConfiguration(t *testing.T) {
 	}
 	if runtime.GOOS != "linux" && err == nil {
 		t.Fatal("accepted Linux-only public ingress")
+	}
+}
+
+func TestManifestReadinessInterval(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		setting string
+		want    time.Duration
+	}{
+		{"omitted", "", 100 * time.Millisecond},
+		{"zero", `,"readiness":{"interval":"0s"}`, 100 * time.Millisecond},
+		{"fast", `,"readiness":{"interval":"1ms"}`, time.Millisecond},
+		{"slow", `,"readiness":{"interval":"2s"}`, 2 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			body := `{"process":{"command":["true"]` + tc.setting + `}}`
+			if err := os.WriteFile(filepath.Join(dir, manifestName), []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			m, err := loadManifest(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := m.Process.Readiness.Interval.Duration; got != tc.want {
+				t.Fatalf("readiness interval = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }

@@ -73,7 +73,7 @@ func waitReadyUnix(ctx context.Context, socket string, cfg ReadinessConfig) erro
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("readiness timeout: %w", ctx.Err())
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(cfg.pollInterval()):
 		}
 	}
 }

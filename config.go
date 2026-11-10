@@ -180,9 +180,18 @@ type ProcessConfig struct {
 	Restart          RestartConfig     `json:"restart"`
 }
 type ReadinessConfig struct {
-	Type string `json:"type"`
-	Path string `json:"path"`
+	Type     string   `json:"type"`
+	Path     string   `json:"path"`
+	Interval Duration `json:"interval"`
 }
+
+func (r ReadinessConfig) pollInterval() time.Duration {
+	if r.Interval.Duration == 0 {
+		return 100 * time.Millisecond
+	}
+	return r.Interval.Duration
+}
+
 type RestartConfig struct {
 	Policy          string   `json:"policy"`
 	Delay           Duration `json:"delay"`
@@ -288,6 +297,7 @@ func loadManifest(dir string) (Manifest, error) {
 		if m.Process.Readiness.Type == "" {
 			m.Process.Readiness.Type = "tcp"
 		}
+		m.Process.Readiness.Interval.Duration = m.Process.Readiness.pollInterval()
 		if m.Process.Restart.Policy == "" {
 			m.Process.Restart.Policy = "on-failure"
 		}
@@ -301,6 +311,9 @@ func loadManifest(dir string) (Manifest, error) {
 	if p := m.Process; p != nil {
 		if p.StartupTimeout.Duration < 0 || p.ShutdownTimeout.Duration < 0 || p.Restart.Delay.Duration < 0 || p.Restart.MaximumAttempts < 0 {
 			return m, fmt.Errorf("process timeouts, restart delay and maximum_attempts must be nonnegative")
+		}
+		if p.Readiness.Interval.Duration < 0 {
+			return m, fmt.Errorf("readiness.interval must be nonnegative")
 		}
 		if p.Readiness.Type != "tcp" && p.Readiness.Type != "http" {
 			return m, fmt.Errorf("readiness.type must be tcp or http")

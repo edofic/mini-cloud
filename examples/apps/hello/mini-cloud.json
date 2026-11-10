@@ -11,7 +11,8 @@
     "shutdown_timeout": "3s",
     "readiness": {
       "type": "http",
-      "path": "/health"
+      "path": "/health",
+      "interval": "10ms"
     },
     "restart": {
       "policy": "on-failure",

@@ -52,7 +52,7 @@ Watch patterns are relative to the app root and use shell-style path matching: `
     "environment_files": [".env"],
     "startup_timeout": "30s",
     "shutdown_timeout": "10s",
-    "readiness": { "type": "http", "path": "/health" },
+    "readiness": { "type": "http", "path": "/health", "interval": "10ms" },
     "restart": {
       "policy": "on-failure",
       "delay": "2s",
@@ -67,6 +67,8 @@ Commands are argument arrays without an implicit shell. `working_directory` defa
 Environment precedence is gateway environment, environment files in order, manifest values, then gateway fields `APP_NAME`, `PORT`, and `LISTEN_ADDRESS`. Environment files must be listed explicitly; `.env` is not loaded automatically. They support `KEY=VALUE`, whole-line `#` comments, and matching outer quotes, without shell evaluation. Command arguments expand `$NAME` and `${NAME}` using the resulting environment; missing variables become empty strings.
 
 Startup and shutdown timeouts default to `30s` and `10s`. Readiness defaults to `tcp`; HTTP readiness defaults to path `/` and accepts 2xx or 3xx without following redirects. The app must bind `127.0.0.1:$PORT`, except under `bubblewrap-hardened`, where it must use `LISTEN_NETWORK=unix` and the assigned Unix `LISTEN_ADDRESS`. Shutdown sends SIGTERM to the process group and SIGKILL after the timeout; wrappers should use `exec`.
+
+Readiness probes run immediately, then wait `process.readiness.interval` after each unsuccessful probe. The interval is a duration string, defaults to `100ms`, and applies to TCP and HTTP probes over loopback or hardened Unix sockets. Omitted or `"0s"` selects the default; negative values are invalid. Use a shorter interval such as `"1ms"` or `"10ms"` for fast-starting apps. The interval controls the delay between attempts, not the probe timeout or overall `startup_timeout`.
 
 Restart defaults are `on-failure`, a `2s` delay, and five automatic attempts. Zero values for process timeouts, restart delay, and attempt count select these defaults. `never` disables automatic retries; a later request can still start a stopped or failed process. **Current limitation:** `always` passes manifest validation but does not trigger automatic retries. Use `on-failure` when automatic recovery is needed. See [failure recovery](operations.md#failure-recovery).
 

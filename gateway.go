@@ -806,7 +806,7 @@ func waitReady(ctx context.Context, port int, r ReadinessConfig) error {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("readiness timeout: %w (last error: %v)", ctx.Err(), err)
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(r.pollInterval()):
 		}
 	}
 }

@@ -31,12 +31,14 @@ Select exactly one runtime:
     "command": ["./server", "--port", "${PORT}"],
     "working_directory": ".",
     "environment_files": [".env"],
-    "readiness": { "type": "http", "path": "/health" }
+    "readiness": { "type": "http", "path": "/health", "interval": "10ms" }
   },
   "idle": "5m",
   "watch": { "ignore": ["data", "tmp"] }
 }
 ```
+
+`process.readiness.interval` optionally sets the delay after unsuccessful readiness probes, for example `"1ms"` or `"10ms"`. The first probe runs immediately. Omitted or `"0s"` uses `100ms`; negative values are invalid. It applies to TCP and HTTP readiness over loopback and hardened Unix sockets. `startup_timeout` still limits the overall wait.
 
 ### Static example
 
